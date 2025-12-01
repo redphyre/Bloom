@@ -1343,8 +1343,12 @@
 
             // --- Injections Page Logic ---
             const renderInjections = () => (
+<<<<<<< HEAD:index.html
                 // FIX: Removed redundant pt-4, relying entirely on pwa-content-offset for correct top spacing.
                 <div className="pb-24 px-4 animate-fade-in pwa-content-offset"> 
+=======
+                <div className="pb-24 px-4 animate-fade-in pt-4 pwa-content-offset">
+>>>>>>> 85e7c3d (Second attempt to fix settings page overlap issues.):bloom.html
                     <div className="flex items-center gap-3 mb-6">
                         <button onClick={() => setActiveTab('home')} className="p-2 -ml-2 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><Icon name="chevronLeft" className="w-6 h-6" /></button>
                         <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">Injections</h2>
@@ -1463,6 +1467,7 @@
                     <div className="px-4 space-y-8">
                         {sessions.length === 0 && <div className="text-center text-gray-400 dark:text-gray-500 mt-10">No history yet. Start your first session!</div>}
                         
+<<<<<<< HEAD:index.html
                         {/* Grouping logic (omitted for brevity, assume content array 'sortedWeeks' and mapping logic) */}
                     </div>
                     
@@ -1484,37 +1489,53 @@
                                             className={`w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform ${expandedWeeks[weekKey] === false ? '-rotate-90' : ''}`} 
                                         />
                                     </button>
+=======
+                        {sortedWeeks.map(weekKey => (
+                            <div key={weekKey} className="space-y-4">
+                                {/* Week Header */}
+                                <button 
+                                    onClick={() => toggleWeek(weekKey)}
+                                    className="flex items-center justify-between w-full text-left bg-gray-50 dark:bg-gray-800 p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    <span className="font-bold text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">
+                                        Week of {formatWeekHeader(weekKey)}
+                                    </span>
+                                    <Icon 
+                                        name="chevronDown" 
+                                        className={`w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform ${expandedWeeks[weekKey] === false ? '-rotate-90' : ''}`} 
+                                    />
+                                </button>
+>>>>>>> 85e7c3d (Second attempt to fix settings page overlap issues.):bloom.html
 
-                                    {/* Sessions List for this Week */}
-                                    {(expandedWeeks[weekKey] !== false) && (
-                                        <div className="space-y-4 animate-fade-in">
-                                            {groupedSessions[weekKey].map(session => (
-                                                <div key={session.id} className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border print:border print:shadow-none ${session.isEmergency ? 'border-red-100 dark:border-red-900 bg-red-50/30 dark:bg-red-900/10' : session.isMissed ? 'border-red-100 dark:border-red-900 bg-red-50/30 dark:bg-red-900/10' : 'border-gray-100 dark:border-gray-700'} relative`}>
-                                                    <button 
-                                                        onClick={() => deleteSession(session.id)} 
-                                                        className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 bg-white/50 dark:bg-gray-800/50 hover:bg-red-50 rounded-full transition-colors z-10"
-                                                        title="Delete Entry"
-                                                    >
-                                                        <Icon name="trash2" className="w-4 h-4" />
-                                                    </button>
-                                                    <div className="flex justify-between items-start mb-3 pr-8">
-                                                        <div>
-                                                            <p className="font-bold text-gray-800 dark:text-gray-100">{formatDate(session.date)}</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(session.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {session.surgeryAge} Post-Op</p>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <span className={`block font-bold ${session.isEmergency || session.isMissed ? 'text-red-500 dark:text-red-400' : 'text-purple-600 dark:text-purple-400'}`}>{session.isEmergency ? 'STOP' : session.isMissed ? 'Missed' : Math.floor(session.duration / 60) + ' min'}</span>
-                                                            <span className="text-xs text-gray-400 dark:text-gray-500">Total</span>
-                                                        </div>
+                                {/* Sessions List for this Week */}
+                                {(expandedWeeks[weekKey] !== false) && (
+                                    <div className="space-y-4 animate-fade-in">
+                                        {groupedSessions[weekKey].map(session => (
+                                            <div key={session.id} className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border print:border print:shadow-none ${session.isEmergency ? 'border-red-100 dark:border-red-900 bg-red-50/30 dark:bg-red-900/10' : session.isMissed ? 'border-red-100 dark:border-red-900 bg-red-50/30 dark:bg-red-900/10' : 'border-gray-100 dark:border-gray-700'} relative`}>
+                                                <button 
+                                                    onClick={() => deleteSession(session.id)} 
+                                                    className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 bg-white/50 dark:bg-gray-800/50 hover:bg-red-50 rounded-full transition-colors z-10"
+                                                    title="Delete Entry"
+                                                >
+                                                    <Icon name="trash2" className="w-4 h-4" />
+                                                </button>
+                                                <div className="flex justify-between items-start mb-3 pr-8">
+                                                    <div>
+                                                        <p className="font-bold text-gray-800 dark:text-gray-100">{formatDate(session.date)}</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(session.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {session.surgeryAge} Post-Op</p>
                                                     </div>
-                                                    {!session.isMissed && (
-                                                        <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden flex mb-3">
-                                                            {session.breakdown.S > 0 && <div style={{width: `${(session.breakdown.S / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-blue-400'} h-full`}/>}
-                                                            {session.breakdown.M > 0 && <div style={{width: `${(session.breakdown.M / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-green-400'} h-full`}/>}
-                                                            {session.breakdown.L > 0 && <div style={{width: `${(session.breakdown.L / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-orange-400'} h-full`}/>}
-                                                            {/* Fallback for manual entries with no breakdown */}
-                                                            {(!session.breakdown.S && !session.breakdown.M && !session.breakdown.L) && <div className={`w-full ${session.isEmergency ? 'bg-red-400' : 'bg-purple-300'} h-full`}/>}
-                                                        </div>
+                                                    <div className="text-right">
+                                                        <span className={`block font-bold ${session.isEmergency || session.isMissed ? 'text-red-500 dark:text-red-400' : 'text-purple-600 dark:text-purple-400'}`}>{session.isEmergency ? 'STOP' : session.isMissed ? 'Missed' : Math.floor(session.duration / 60) + ' min'}</span>
+                                                        <span className="text-xs text-gray-400 dark:text-gray-500">Total</span>
+                                                    </div>
+                                                </div>
+                                                {!session.isMissed && (
+                                                    <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden flex mb-3">
+                                                        {session.breakdown.S > 0 && <div style={{width: `${(session.breakdown.S / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-blue-400'} h-full`}/>}
+                                                        {session.breakdown.M > 0 && <div style={{width: `${(session.breakdown.M / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-green-400'} h-full`}/>}
+                                                        {session.breakdown.L > 0 && <div style={{width: `${(session.breakdown.L / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-orange-400'} h-full`}/>}
+                                                        {/* Fallback for manual entries with no breakdown */}
+                                                        {(!session.breakdown.S && !session.breakdown.M && !session.breakdown.L) && <div className={`w-full ${session.isEmergency ? 'bg-red-400' : 'bg-purple-300'} h-full`}/>}
                                                     )}
                                                     
                                                     {!session.isMissed && (
