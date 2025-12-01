@@ -1701,7 +1701,8 @@
                                     {showInjectionSelector && renderInjectionSelector()}
 
                                     {!isSessionActive && !showAftercare && (
-                                        <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center z-40 no-print pwa-safe-bottom">
+                                        // CHANGED: 'absolute' -> 'fixed'. Added 'backdrop-blur-md' and opacity (/90) for glass effect.
+                                        <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center z-40 no-print pwa-safe-bottom transition-all duration-300">
                                             <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}>
                                                 <Icon name="heart" className={`w-6 h-6 ${activeTab === 'home' ? 'fill-current' : ''}`} />
                                                 <span className="text-[10px] font-medium">Home</span>
@@ -1710,9 +1711,13 @@
                                                 <Icon name="history" className={`w-6 h-6 ${activeTab === 'history' ? 'stroke-[2.5px] text-purple-600 dark:text-purple-400' : ''}`} />
                                                 <span className="text-[10px] font-medium">History</span>
                                             </button>
-                                            <button onClick={startSession} className="mb-8 bg-gradient-to-tr from-purple-600 to-pink-500 text-white p-4 rounded-full shadow-lg hover:scale-105 transition-transform">
+                                            
+                                            {/* Floating Start Button */}
+                                            {/* Adjusted margin to sit nicely within the fixed bar */}
+                                            <button onClick={startSession} className="-mt-12 bg-gradient-to-tr from-purple-600 to-pink-500 text-white p-4 rounded-full shadow-lg hover:scale-105 transition-transform ring-4 ring-gray-50 dark:ring-gray-900">
                                                 <Icon name="plus" className="w-8 h-8" />
                                             </button>
+
                                             <button onClick={() => setActiveTab('injections')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'injections' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}>
                                                 <Icon name="syringe" className={`w-6 h-6 ${activeTab === 'injections' ? 'fill-current' : ''}`} />
                                                 <span className="text-[10px] font-medium">Meds</span>
