@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- MODIFIED VIEWPORT META TAG for portrait orientation lock (iOS/PWA compatibility) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Bloom - Dilation Tracking</title>
+    
+    <!-- PWA / Mobile Web App Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <!-- MODIFIED: Use black-translucent to blend the status bar into the web content -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Bloom">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#f3f4f6">
+    <!-- App Icon Placeholder -->
+    <!-- UPDATED ICON LINKS -->
+    <link rel="apple-touch-icon" href="https://thebrainwire.com/bloom/bloom-icon-trans-3x.png">
+    <link rel="icon" type="image/png" href="https://thebrainwire.com/bloom/bloom-icon-trans-3x.png">
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Configure Tailwind to enable dark mode based on a 'dark' class on the body -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'gray-950': '#0a0a0a',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Custom Styles for Print & Scrollbar -->
+    <style>
+        /* BASE STYLES - Theme independent */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(100%); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up {
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white; }
+        }
+        body {
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none; /* Prevents pull-to-refresh on mobile */
+            transition: background-color 0.3s;
+        }
+        input[type="date"], input[type="datetime-local"] {
+            -webkit-appearance: none;
+            appearance: none;
+            min-height: 3rem; /* Matches h-12 */
+        }
+        
+        /* Dark Mode Slider Styling for Aesthetics */
+        .toggle-switch {
+            width: 4rem;
+            height: 2rem;
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .toggle-knob {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 9999px;
+            transition: all 0.3s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .toggle-switch.dark {
+            background-color: #8b5cf6; /* Purple-500 */
+        }
+        .toggle-switch.light {
+            background-color: #f3f4f6; /* Gray-100 */
+        }
+        .toggle-switch.light .toggle-knob {
+            transform: translateX(0);
+            background-color: #fca5a5; /* Pink-300 */
+        }
+        .toggle-switch.dark .toggle-knob {
+            transform: translateX(2rem); /* Move 1.5rem knob + 0.5rem margin */
+            background-color: #fef3c7; /* Amber-100 */
+        }
+        .toggle-knob svg {
+            transition: opacity 0.3s;
+        }
+
+        /* --- IOS SAFEA AREA FIXES --- */
+        /* 2. Modified: Apply padding to compensate for the home indicator bar in the fixed navbar */
+        .pwa-safe-bottom {
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom)); /* 1rem for existing padding + safe area */
+        }
+
+        /* 1. Modified: Adjust content spacing for non-sticky content (e.g., Home/Settings) */
+        .pwa-content-offset {
+            /* Ensures content starts below the status bar (notch area) */
+            padding-top: env(safe-area-inset-top);
+        }
+        
+        /* NEW: Class for sticky headers. Combines standard padding (1rem/p-4) with safe area inset. */
+        .pwa-sticky-top-pad {
+            padding-top: calc(1rem + env(safe-area-inset-top));
+        }
+        
+        /* NEW: Class for absolutely positioned elements that need to clear the status bar */
+        .pwa-safe-absolute-top {
+            top: calc(0.5rem + env(safe-area-inset-top)); 
+            /* Using 0.5rem (8px) base margin instead of 1rem (16px) for absolute buttons to be tighter */
+        }
+        
+        /* --- PORTRAIT FIX: Hide content if orientation is landscape, now handled by React/JSX/State --- */
+        /* We keep this block simple to only hide the main content div based on landscape orientation */
+        @media only screen and (orientation: landscape) {
+            body > #root > .app-content {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 h-screen overflow-hidden selection:bg-purple-200">
+    <div id="root" class="h-full"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- THEME CONSTANTS ---
+        const LIGHT_LOGO = "https://thebrainwire.com/bloom/bloom-logo-new-trans-3x-light.png";
+        const DARK_LOGO = "https://thebrainwire.com/bloom/bloom-logo-new-trans-3x-dark.png";
+        
+        // --- Icons Component (Replaces Lucide-React for single file portability) ---
+        const Icon = ({ name, className, ...props }) => {
+            const icons = {
+                heart: <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />,
+                settings: <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l-.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />,
+                plus: <path d="M5 12h14 M12 5v14" />,
+                history: <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5 M12 7v5l4 2" />,
+                chevronLeft: <path d="m15 18-6-6 6-6" />,
+                chevronDown: <path d="m6 9 6 6 6-6" />,
+                check: <path d="M20 6 9 17l-5-5" />,
+                play: <path d="M5 3l14 9-14 9V3z" />,
+                pause: <path d="M6 4h4v16H6zm8 0h4v16h-4z" />,
+                alertTriangle: <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z M12 9v4 M12 17h.01" />,
+                syringe: (
+                    <g>
+                        <path d="m18 2 4 4" />
+                        <path d="m17 7 3-3" />
+                        <path d="M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5" />
+                        <path d="m9 11 4 4" />
+                        <path d="m5 19-3 2" />
+                        <path d="m14 4 6 6" />
+                    </g>
+                ),
+                download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-3-2v-4 M7 10l5 5 5-5 M12 15V3" />,
+                x: <path d="M18 6 6 18 M6 6l12 12" />,
+                activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+                frown: <g><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2 M9 9h.01 M15 9h.01"/></g>,
+                trash2: <path d="M3 6h18 M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6 M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2 M10 11v6 M14 11v6" />,
+                filetext: <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8" />,
+                sun: <path d="M12 2v1 M12 21v1 M4.22 4.22l.71.71 M18.07 18.07l.71.71 M1 12h1 M21 12h1 M4.22 19.78l.71-.71 M18.07 5.93l.71-.71 M8 12a4 4 0 1 0 8 0 4 4 0 0 0-8 0z"/>,
+                moon: <path d="M12 3a6.36 6.36 0 0 0 9 9 9 9 0 1 1-8.53-8.56Z"/>,
+                // New Icon for Landscape Warning (Screen Rotate)
+                rotateCw: <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5 M12 16v-4l-4-2"/>, 
+                // A simplified phone/tablet icon for the warning
+                tabletLandscape: <rect width="20" height="15" x="2" y="4.5" rx="3" ry="3"/>,
+            };
+
+            return (
+                <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    width="24" height="24" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    className={className} 
+                    {...props}
+                >
+                    {icons[name] || null}
+                </svg>
+            );
+        };
+        
+        // --- Landscape Warning Component ---
+        const LandscapeWarning = ({ isDark }) => (
+            <div className={`fixed inset-0 flex flex-col items-center justify-center p-8 text-center transition-colors duration-500 z-50 ${
+                isDark 
+                    ? 'bg-gray-900 text-gray-50' 
+                    : 'bg-gray-50 text-gray-900'
+            }`}>
+                <div className="mb-6">
+                    {/* Simplified Tablet Landscape Icon */}
+                    <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="mx-auto" stroke="currentColor">
+                        <rect x="3" y="6" width="18" height="12" rx="2" strokeWidth="2" className="stroke-purple-400"/>
+                        <circle cx="12" cy="12" r="1" fill="currentColor" className="fill-purple-400"/>
+                        {/* Rotation Arrow Overlay */}
+                        <path d="M20 12a8 8 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5 M12 16v-4l-4-2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-pink-500"/>
+                    </svg>
+                </div>
+                <h1 className={`text-2xl font-bold mb-3 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
+                    Please Rotate Device
+                </h1>
+                <p className={`text-base ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Bloom is optimized for portrait view only.
+                </p>
+            </div>
+        );
+
+
+        // --- Logo Component (Kept for completeness, though not used for the theme logic) ---
+        const BloomLogo = ({ className = "w-10 h-10" }) => (
+            <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                <linearGradient id="bloomGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#ec4899" /> 
+                    <stop offset="100%" stopColor="#8b5cf6" />
+                </linearGradient>
+                </defs>
+                <path d="M50 20 H 65 C 85 20, 85 50, 65 50 H 55 V 20 Z" fill="url(#bloomGradient)" />
+                <path d="M55 50 H 68 C 90 50, 90 85, 68 85 H 50 V 50 Z" fill="url(#bloomGradient)" />
+                <path d="M45 20 C 25 20, 15 35, 45 50 C 45 40, 48 25, 45 20 Z" fill="url(#bloomGradient)" opacity="0.9"/>
+                <path d="M10 52 C 10 40, 35 45, 48 52 C 35 60, 10 65, 10 52 Z" fill="url(#bloomGradient)" opacity="0.8"/>
+                <path d="M45 85 C 25 85, 15 70, 45 55 C 45 65, 48 80, 45 85 Z" fill="url(#bloomGradient)" opacity="0.9"/>
+            </svg>
+        );
+
+        // --- Helpers ---
+        const formatDate = (isoString) => {
+            if (!isoString) return '';
+            try {
+                return new Date(isoString).toLocaleDateString('en-US', {
+                    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+                });
+            } catch (e) {
+                return '';
+            }
+        };
+
+        const formatWeekHeader = (dateString) => {
+            try {
+                const d = new Date(dateString);
+                if (isNaN(d.getTime())) return '';
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            } catch (e) {
+                return '';
+            }
+        };
+
+        const formatTime = (seconds) => {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${m}:${s < 10 ? '0' : ''}${s}`;
+        };
+
+        const calculateSurgeryAge = (dateString) => {
+            if (!dateString) return null;
+            const surgery = new Date(dateString);
+            if (isNaN(surgery.getTime())) return null; 
+            
+            const now = new Date();
+            const diffTime = Math.abs(now - surgery);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            const months = Math.floor(diffDays / 30.44);
+            const days = Math.floor(diffDays % 30.44);
+            
+            return { totalDays: diffDays, text: `${months}m ${days}d` };
+        };
+        
+        const formatTimeSafe = (dateString) => {
+             try {
+                 const d = new Date(dateString);
+                 if (isNaN(d.getTime())) return '';
+                 return d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', hour12: true});
+             } catch (e) {
+                 return '';
+             }
+        };
+
+        // --- Sound Helper ---
+        const playCompletionSound = () => {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            
+            const t = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            // Gentle Sine Wave Chime
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(523.25, t); // C5
+            osc.frequency.exponentialRampToValueAtTime(1046.5, t + 0.1); // C6
+            
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 2);
+            
+            osc.start(t);
+            osc.stop(t + 2);
+        };
+
+        // --- Main App ---
+        function BloomApp() {
+            const [activeTab, setActiveTab] = useState('home');
+            const [isLandscape, setIsLandscape] = useState(false); // State for orientation
+
+            // --- Robust Persistence: Lazy Initialization ---
+            const [sessions, setSessions] = useState(() => {
+                const saved = localStorage.getItem('bloom_sessions');
+                return saved ? JSON.parse(saved) : [];
+            });
+
+            const [injections, setInjections] = useState(() => {
+                const saved = localStorage.getItem('bloom_injections');
+                return saved ? JSON.parse(saved) : [];
+            });
+
+            const [userSettings, setUserSettings] = useState(() => {
+                const saved = localStorage.getItem('bloom_settings');
+                const defaults = {
+                    surgeryDate: '',
+                    targetTime: 20,
+                    dailyTarget: 3, 
+                    name: '', 
+                    injectionSites: [],
+                    isSetupComplete: false,
+                    theme: 'light', // ADDED THEME SETTING
+                };
+                // Merge defaults with saved data to ensure new fields (like dailyTarget) are populated for existing users
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // If returning user has a name, assume setup is complete
+                    const isSetup = parsed.isSetupComplete || (parsed.name && parsed.name !== 'Patient');
+                    // Ensure theme defaults to 'light' if not saved
+                    return { ...defaults, ...parsed, isSetupComplete: isSetup, theme: parsed.theme || 'light' };
+                }
+                return defaults;
+            });
+
+            // Session State
+            const [isSessionActive, setIsSessionActive] = useState(false);
+            const [isPaused, setIsPaused] = useState(false);
+            const [activeSize, setActiveSize] = useState(null);
+            const [sessionTimer, setSessionTimer] = useState(0);
+            const [sizeTimers, setSizeTimers] = useState({ S: 0, M: 0, L: 0 });
+            const [showAftercare, setShowAftercare] = useState(false);
+            
+            // Manual Log State
+            const [showManualEntry, setShowManualEntry] = useState(false);
+            const [manualEntry, setManualEntry] = useState({
+                date: '',
+                duration: 20,
+                type: 'completed', 
+                notes: '',
+                pain: 0,
+                pressure: 0,
+                mood: [] // ADDED MOOD ARRAY
+            });
+
+            // Emergency Stop State
+            const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+            const [emergencyData, setEmergencyData] = useState({
+                reason: '',
+                notes: ''
+            });
+            
+            // History Grouping State
+            const [expandedWeeks, setExpandedWeeks] = useState({});
+
+            // Injection Modal States
+            const [showInjectionSetup, setShowInjectionSetup] = useState(false);
+            const [showInjectionSelector, setShowInjectionSelector] = useState(false);
+            const [tempInjectionSites, setTempInjectionSites] = useState([]);
+
+            // Aftercare State
+            const [aftercareData, setAftercareData] = useState({
+                pain: 0,
+                pressure: 0,
+                mood: [],
+                notes: ''
+            });
+
+            // Persistence: Save on change
+            useEffect(() => {
+                localStorage.setItem('bloom_sessions', JSON.stringify(sessions));
+                localStorage.setItem('bloom_settings', JSON.stringify(userSettings));
+                localStorage.setItem('bloom_injections', JSON.stringify(injections));
+            }, [sessions, userSettings, injections]);
+
+            // --- ORIENTATION EFFECT ---
+            useEffect(() => {
+                const checkOrientation = () => {
+                    // Check if width is greater than height
+                    setIsLandscape(window.innerWidth > window.innerHeight && window.innerWidth > 600); // Only trigger for typical mobile size range/aspect ratio flip
+                };
+                
+                checkOrientation();
+                window.addEventListener('resize', checkOrientation);
+                window.addEventListener('orientationchange', checkOrientation); // For mobile orientation changes
+
+                return () => {
+                    window.removeEventListener('resize', checkOrientation);
+                    window.removeEventListener('orientationchange', checkOrientation);
+                };
+            }, []);
+            // --- END ORIENTATION EFFECT ---
+
+
+            // --- THEME EFFECT: Apply 'dark' class to body tag ---
+            useEffect(() => {
+                const body = document.body;
+                if (userSettings.theme === 'dark') {
+                    body.classList.add('dark');
+                    // Update PWA theme color meta tag
+                    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1f2937'); // dark gray
+                    body.classList.remove('bg-gray-100', 'text-gray-900');
+                    body.classList.add('bg-gray-950', 'text-gray-100');
+                } else {
+                    body.classList.remove('dark');
+                    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f3f4f6'); // light gray
+                    body.classList.remove('bg-gray-950', 'text-gray-100');
+                    body.classList.add('bg-gray-100', 'text-gray-900');
+                }
+            }, [userSettings.theme]);
+            // --- END THEME EFFECT ---
+
+            // Timer Logic with Auto-Stop & Completion Sound
+            useEffect(() => {
+                let interval;
+                const targetSeconds = userSettings.targetTime * 60;
+                
+                if (isSessionActive && activeSize && !isPaused && !showEmergencyModal && sessionTimer < targetSeconds) {
+                    interval = setInterval(() => {
+                        setSessionTimer(prev => prev + 1);
+                        setSizeTimers(prev => ({
+                            ...prev,
+                            [activeSize]: prev[activeSize] + 1
+                        }));
+                    }, 1000);
+                }
+                return () => clearInterval(interval);
+            }, [isSessionActive, activeSize, isPaused, showEmergencyModal, sessionTimer, userSettings.targetTime]);
+
+            // Completion Effect (Sound Only)
+            useEffect(() => {
+                const targetSeconds = userSettings.targetTime * 60;
+                // Check if session is active and we just hit the target (or jumped past it)
+                if (isSessionActive && sessionTimer >= targetSeconds && sessionTimer > 0) {
+                    playCompletionSound();
+                    
+                    // Auto-stop session when target time is reached
+                    if (sessionTimer >= targetSeconds) {
+                        stopSession(); 
+                    }
+                }
+            }, [sessionTimer, isSessionActive, userSettings.targetTime]);
+
+
+            // Handlers
+            const startSession = () => {
+                // If we are already at max time, reset to 0 to allow restart
+                if (sessionTimer >= userSettings.targetTime * 60) {
+                    setSessionTimer(0);
+                    setSizeTimers({ S: 0, M: 0, L: 0 });
+                }
+                setIsSessionActive(true);
+                setIsPaused(false);
+                setActiveTab('track');
+                if (!isSessionActive && sessionTimer === 0) {
+                    setSessionTimer(0);
+                    setSizeTimers({ S: 0, M: 0, L: 0 });
+                }
+            };
+
+            const cancelSession = () => {
+                // Placeholder for a custom confirmation modal function
+                // Reverting to native for critical user data loss confirmation, 
+                // as a custom implementation requires significantly more code/state in a single-file environment.
+                const confirmCustomModal = (title, message, onConfirm) => {
+                     return window.confirm(message); // returns true on OK, false on Cancel
+                };
+                
+                // If there is no timer data, just cancel immediately without alert
+                if (sessionTimer === 0) {
+                    setIsSessionActive(false);
+                    setIsPaused(false);
+                    setActiveSize(null);
+                    setSessionTimer(0);
+                    setSizeTimers({ S: 0, M: 0, L: 0 });
+                    setActiveTab('home');
+                    return;
+                }
+
+                // If timer has run, ask for confirmation
+                const isConfirmed = confirmCustomModal("Cancel this session?", "Are you sure you want to cancel? Progress will be lost.");
+                
+                // If confirmed (OK is pressed)
+                if (isConfirmed) {
+                    setIsSessionActive(false);
+                    setIsPaused(false);
+                    setActiveSize(null);
+                    setSessionTimer(0);
+                    setSizeTimers({ S: 0, M: 0, L: 0 });
+                    setActiveTab('home');
+                }
+                // If not confirmed (Cancel is pressed), the function simply returns, leaving the session active/paused.
+            };
+
+            const stopSession = () => {
+                setIsSessionActive(false);
+                setIsPaused(false);
+                setActiveSize(null);
+                setShowAftercare(true);
+            };
+
+            const closeAftercare = () => {
+                // NOTE: Using custom UI modal instead of window.confirm()
+                const discardConfirmed = confirmCustomModal("Discard Session?", "Discard this session? Your data will not be saved.", null); 
+                
+                if (discardConfirmed) {
+                    setShowAftercare(false);
+                    setSessionTimer(0);
+                    setSizeTimers({ S: 0, M: 0, L: 0 });
+                    setAftercareData({ pain: 0, pressure: 0, mood: [], notes: '' });
+                    setActiveTab('home');
+                }
+            };
+
+            const saveSession = () => {
+                const newSession = {
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    duration: sessionTimer,
+                    breakdown: sizeTimers,
+                    ...aftercareData,
+                    surgeryAge: calculateSurgeryAge(userSettings.surgeryDate)?.text || 'N/A'
+                };
+                setSessions([newSession, ...sessions]);
+                setShowAftercare(false);
+                setSessionTimer(0);
+                setSizeTimers({ S: 0, M: 0, L: 0 });
+                setAftercareData({ pain: 0, pressure: 0, mood: [], notes: '' });
+                setActiveTab('history');
+            };
+
+            const deleteSession = (id) => {
+                // NOTE: Using custom UI modal instead of window.confirm()
+                if(confirmCustomModal("Delete Entry?", "Are you sure you want to delete this entry?")) {
+                    setSessions(sessions.filter(s => s.id !== id));
+                }
+            };
+            
+            const toggleWeek = (weekKey) => {
+                setExpandedWeeks(prev => {
+                    const current = prev[weekKey];
+                    // if undefined, it is currently expanded (default), so new value should be false
+                    const newValue = current === undefined ? false : !current;
+                    return {
+                        ...prev,
+                        [weekKey]: newValue
+                    };
+                });
+            };
+            
+            const handleExpandAll = () => {
+                setExpandedWeeks({}); // Resetting to empty means everything uses default (true)
+            };
+
+            const handleCollapseAll = () => {
+                const groupedSessions = sessions.reduce((acc, session) => {
+                    const date = new Date(session.date);
+                    // Get beginning of week (Sunday)
+                    const day = date.getDay();
+                    const diff = date.getDate() - day; 
+                    const weekStart = new Date(date);
+                    weekStart.setDate(diff);
+                    weekStart.setHours(0,0,0,0);
+                    const key = weekStart.toDateString();
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(session);
+                    return acc;
+                }, {});
+                const allCollapsed = Object.keys(groupedSessions).reduce((acc, week) => ({...acc, [week]: false}), {});
+                setExpandedWeeks(allCollapsed);
+            };
+
+            // --- Emergency Stop Logic ---
+            const handleEmergencyStop = () => {
+                setIsPaused(true); // Pause the timer
+                setEmergencyData({ reason: '', notes: '' });
+                setShowEmergencyModal(true);
+            };
+
+            const saveEmergencyStop = () => {
+                const newSession = {
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    duration: sessionTimer,
+                    breakdown: sizeTimers,
+                    pain: 10, // Assume max pain or irrelevant
+                    pressure: 0,
+                    mood: ['Emergency'],
+                    notes: `${emergencyData.reason}${emergencyData.notes ? ': ' + emergencyData.notes : ''}`,
+                    surgeryAge: calculateSurgeryAge(userSettings.surgeryDate)?.text || 'N/A',
+                    isEmergency: true,
+                    emergencyReason: emergencyData.reason
+                };
+                setSessions([newSession, ...sessions]);
+                
+                // Reset states
+                setShowEmergencyModal(false);
+                setIsSessionActive(false);
+                setIsPaused(false);
+                setActiveSize(null);
+                setSessionTimer(0);
+                setSizeTimers({ S: 0, M: 0, L: 0 });
+                setActiveTab('history');
+            };
+
+            // --- Manual Entry Logic ---
+            const handleManualEntryClick = () => {
+                const now = new Date();
+                const offset = now.getTimezoneOffset() * 60000;
+                const localIso = new Date(now - offset).toISOString().slice(0, 16);
+                
+                setManualEntry({
+                    date: localIso,
+                    duration: userSettings.targetTime || 20,
+                    type: 'completed',
+                    notes: '',
+                    pain: 0,
+                    pressure: 0,
+                    mood: [] // Initialize mood array
+                });
+                setShowManualEntry(true);
+            };
+            
+            const toggleManualMood = (mood) => {
+                const newMoods = manualEntry.mood.includes(mood) 
+                    ? manualEntry.mood.filter(m => m !== mood) 
+                    : [...manualEntry.mood, mood];
+                setManualEntry({...manualEntry, mood: newMoods});
+            };
+
+
+            const saveManualEntry = () => {
+                const isMissed = manualEntry.type === 'missed';
+                // Use a default mood if it was completed and no mood was selected, otherwise use 'Skipped' or the user's choices
+                const moodToLog = isMissed 
+                    ? ['Skipped'] 
+                    : (manualEntry.mood.length > 0 ? manualEntry.mood : ['Manual Log']);
+
+                const newSession = {
+                    id: Date.now(),
+                    date: new Date(manualEntry.date).toISOString(),
+                    duration: isMissed ? 0 : (parseInt(manualEntry.duration) || 0) * 60,
+                    breakdown: { S: 0, M: 0, L: 0 },
+                    pain: isMissed ? 0 : (manualEntry.pain || 0),
+                    pressure: isMissed ? 0 : (manualEntry.pressure || 0),
+                    mood: moodToLog, // Use calculated mood
+                    notes: manualEntry.notes,
+                    surgeryAge: calculateSurgeryAge(userSettings.surgeryDate)?.text || 'N/A',
+                    isMissed: isMissed
+                };
+                
+                const updatedSessions = [newSession, ...sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+                setSessions(updatedSessions);
+                setShowManualEntry(false);
+            };
+
+            // --- Injection Logic ---
+            const handleAddInjectionClick = () => {
+                // If no sites are configured, show Setup
+                if (!userSettings.injectionSites || userSettings.injectionSites.length === 0) {
+                    setTempInjectionSites([]); // Reset temp
+                    setShowInjectionSetup(true);
+                } else if (userSettings.injectionSites.length === 1) {
+                    // If only 1 site is preferred, just log it immediately
+                    confirmInjection(userSettings.injectionSites[0]);
+                } else {
+                    // If multiple sites, show selector
+                    setShowInjectionSelector(true);
+                }
+            };
+
+            const confirmInjection = (site) => {
+                const newInjection = {
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    site: site
+                };
+                setInjections([newInjection, ...injections]);
+                setShowInjectionSelector(false);
+            };
+            
+            const deleteInjection = (id) => {
+                // NOTE: Using custom UI modal instead of window.confirm()
+                if(confirmCustomModal("Delete Injection?", "Are you sure you want to delete this entry?")) {
+                    setInjections(injections.filter(i => i.id !== id));
+                }
+            };
+
+            const saveInjectionPreferences = () => {
+                const sitesToSave = tempInjectionSites.length > 0 ? tempInjectionSites : ['Right Thigh', 'Left Thigh']; // Default fallback
+                setUserSettings({...userSettings, injectionSites: sitesToSave});
+                setShowInjectionSetup(false);
+                
+                // If they just finished setup, let's proceed to log one if they want, 
+                // or just close. Let's close and let them click 'Log' again or auto-trigger?
+                // We'll just close for simplicity.
+            };
+
+            const toggleTempSite = (site) => {
+                if (tempInjectionSites.includes(site)) {
+                    setTempInjectionSites(tempInjectionSites.filter(s => s !== site));
+                } else {
+                    setTempInjectionSites([...tempInjectionSites, site]);
+                }
+            };
+
+            const toggleSettingSite = (site) => {
+                let currentSites = userSettings.injectionSites || [];
+                if (currentSites.includes(site)) {
+                    setUserSettings({...userSettings, injectionSites: currentSites.filter(s => s !== site)});
+                } else {
+                    setUserSettings({...userSettings, injectionSites: [...currentSites, site]});
+                }
+            };
+
+            const exportData = () => {
+                const headers = "Date,Total Duration (s),Small (s),Medium (s),Large (s),Pain (0-10),Pressure (0-10),Mood,Notes\n";
+                const rows = sessions.map(s => 
+                    `${new Date(s.date).toLocaleDateString()},${s.duration},${s.breakdown.S},${s.breakdown.M},${s.breakdown.L},${s.pain},${s.pressure},"${s.mood.join(' ')}","${s.notes}"`
+                ).join("\n");
+                
+                const blob = new Blob([headers + rows], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bloom_export_${new Date().toISOString().split('T')[0]}.csv`;
+                a.click();
+            };
+
+            // --- Helpers for Render ---
+            const getDailyCount = () => {
+                const today = new Date().toDateString();
+                // Filter out missed sessions from daily count if needed, or keep them tracked?
+                // Usually missed means didn't do it, so filter them out for "Completed" count
+                return sessions.filter(s => !s.isMissed && !s.isEmergency && new Date(s.date).toDateString() === today).length;
+            };
+
+            const completeSetup = () => {
+                setUserSettings(prev => ({ ...prev, isSetupComplete: true }));
+            };
+            
+            // --- Theme Toggle Handler
+            const toggleTheme = () => {
+                setUserSettings(prev => ({
+                    ...prev,
+                    theme: prev.theme === 'light' ? 'dark' : 'light'
+                }));
+            };
+
+            // --- Render Views ---
+            
+            // New Setup Wizard View
+            const renderSetupWizard = () => (
+                <div className="fixed inset-0 bg-white dark:bg-gray-950 z-50 flex flex-col items-center justify-center p-8 animate-fade-in overflow-y-auto">
+                    <div className="w-full max-w-sm space-y-8 my-auto">
+                        <div className="text-center space-y-2">
+                            <div className="flex justify-center mb-4">
+                                {/* DYNAMIC LOGO based on theme */}
+                                <img 
+                                    src={userSettings.theme === 'light' ? LIGHT_LOGO : DARK_LOGO}
+                                    alt="Bloom Logo" 
+                                    className="h-16 object-contain" 
+                                />
+                            </div>
+                            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-50">Welcome to Bloom</h1>
+                            <p className="text-gray-500 dark:text-gray-400">Let's get your recovery plan set up.</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">What should we call you?</label>
+                                <input 
+                                    type="text" 
+                                    value={userSettings.name}
+                                    onChange={(e) => setUserSettings({...userSettings, name: e.target.value})}
+                                    className="w-full h-12 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-50 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all"
+                                    placeholder="Your Name"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Surgery Date</label>
+                                <input 
+                                    type="date" 
+                                    value={userSettings.surgeryDate}
+                                    onChange={(e) => setUserSettings({...userSettings, surgeryDate: e.target.value})}
+                                    className="w-full h-12 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-50 focus:border-purple-500 outline-none appearance-none"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Session Time</label>
+                                    <div className="relative">
+                                        <input 
+                                            type="number" 
+                                            value={userSettings.targetTime}
+                                            onChange={(e) => setUserSettings({...userSettings, targetTime: parseInt(e.target.value)})}
+                                            className="w-full h-12 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-50 outline-none"
+                                        />
+                                        <span className="absolute right-4 top-4 text-gray-400 text-sm font-medium pt-1">min</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Daily Goal</label>
+                                    <div className="relative">
+                                        <input 
+                                            type="number" 
+                                            value={userSettings.dailyTarget}
+                                            onChange={(e) => setUserSettings({...userSettings, dailyTarget: parseInt(e.target.value)})}
+                                            className="w-full h-12 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-50 outline-none"
+                                        />
+                                        <span className="absolute right-4 top-4 text-gray-400 text-sm font-medium pt-1">dilations</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={completeSetup}
+                            disabled={!userSettings.name || !userSettings.surgeryDate}
+                            className="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-purple-200 active:scale-95 transition-transform disabled:opacity-50 disabled:scale-100 disabled:shadow-none"
+                        >
+                            Start Tracking
+                        </button>
+                    </div>
+                </div>
+            );
+
+            const renderHome = () => {
+                const age = calculateSurgeryAge(userSettings.surgeryDate);
+                const lastSession = sessions[0];
+                const lastInjection = injections[0];
+                const dailyCount = getDailyCount();
+                const dailyTarget = userSettings.dailyTarget || 3;
+                const dailyProgress = Math.min((dailyCount / dailyTarget) * 100, 100);
+
+                return (
+                    <div className="space-y-6 pb-20 px-2 animate-fade-in">
+                        
+                        {/* Group Logo and Header for tighter spacing */}
+                        {/* MODIFIED: Added pwa-content-offset to the top-level container here */}
+                        <div className="space-y-3 pwa-content-offset">
+                            {/* DYNAMIC LOGO based on theme */}
+                            <div className="flex justify-start">
+                                <img 
+                                    src={userSettings.theme === 'light' ? LIGHT_LOGO : DARK_LOGO}
+                                    alt="Bloom Logo" 
+                                    className="h-12 object-contain" 
+                                />
+                            </div>
+
+                            {/* Header */}
+                            {/* UPDATED GRADIENT AND DARK MODE CLASSES */}
+                            <div className="bg-gradient-to-br from-blue-50 via-pink-50 to-purple-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-800 p-6 rounded-3xl shadow-sm border border-white dark:border-gray-700">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">Hello, {userSettings.name}</h2>
+                                        <p className="text-gray-500 dark:text-gray-400">Welcome back to Bloom</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-4">
+                                    <div className="bg-white dark:bg-gray-700 p-4 rounded-2xl flex-1 shadow-sm border border-purple-50 dark:border-gray-700">
+                                        <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Post-Op</p>
+                                        <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                                            {age ? age.text : <span className="text-sm text-gray-400">Set Date</span>}
+                                        </p>
+                                    </div>
+                                    <div className="bg-white dark:bg-gray-700 p-4 rounded-2xl flex-1 shadow-sm border border-pink-50 dark:border-gray-700">
+                                        <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Streak</p>
+                                        <p className="text-xl font-bold text-pink-500 dark:text-pink-400">
+                                            {sessions.filter(s => !s.isMissed).length > 0 ? 'Active' : '-'}
+                                        </p>
+                                    </div>
+                                </div>
+                                {/* Daily Progress Bar */}
+                                <div className="bg-white dark:bg-gray-700 p-4 rounded-2xl mt-4 shadow-sm border border-blue-50 dark:border-gray-700">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Today's Progress</p>
+                                        <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{dailyCount} / {dailyTarget} Completed</span>
+                                    </div>
+                                    <div className="h-3 w-full bg-gray-100 dark:bg-gray-600 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-gradient-to-r from-blue-400 to-purple-400 transition-all duration-500 ease-out" 
+                                            style={{ width: `${dailyProgress}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Quick Actions */}
+                        <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto w-full">
+                            <button onClick={startSession} className="p-4 bg-gradient-to-tr from-purple-600 to-pink-500 text-white rounded-2xl shadow-lg active:scale-95 transition-all flex flex-col items-center justify-center gap-2 h-32">
+                                <div className="p-2 bg-white/20 rounded-full"><Icon name="plus" className="w-6 h-6" /></div>
+                                <span className="font-semibold text-sm">Start Session</span>
+                            </button>
+                            <button onClick={() => setActiveTab('history')} className="p-4 bg-white dark:bg-gray-700 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-100 rounded-2xl shadow-sm active:scale-95 transition-all flex flex-col items-center justify-center gap-2 h-32">
+                                <div className="p-2 bg-gray-50 dark:bg-gray-600 rounded-full text-purple-600 dark:text-purple-400"><Icon name="history" className="w-6 h-6" /></div>
+                                <span className="font-semibold text-sm">View History</span>
+                            </button>
+                        </div>
+
+                        {/* Recent Activity */}
+                        <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 mx-1">
+                            <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2 text-sm">
+                                <Icon name="activity" className="w-4 h-4 text-pink-500" /> Recent Activity
+                            </h3>
+                            
+                            <div className="space-y-3">
+                                {/* Last Dilation Block */}
+                                {lastSession ? (
+                                    <div className={`flex items-center gap-4 p-3 rounded-xl ${lastSession.isEmergency ? 'bg-red-50 border border-red-100' : lastSession.isMissed ? 'bg-red-50 border border-red-100' : 'bg-gray-50 dark:bg-gray-700'}`}>
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${lastSession.isEmergency || lastSession.isMissed ? 'bg-red-100 text-red-500' : 'bg-purple-100 text-purple-600'}`}>
+                                            {lastSession.isEmergency ? <Icon name="alertTriangle" className="w-5 h-5" /> : lastSession.isMissed ? 'X' : Math.floor(lastSession.duration / 60) + 'm'}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-medium text-gray-800 dark:text-gray-100 text-sm">{lastSession.isEmergency ? 'Emergency Stop' : lastSession.isMissed ? 'Missed Session' : 'Dilation Session'}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(lastSession.date)}</p>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            {lastSession.breakdown.S > 0 && <div className="w-2 h-2 rounded-full bg-blue-400"></div>}
+                                            {lastSession.breakdown.M > 0 && <div className="w-2 h-2 rounded-full bg-green-400"></div>}
+                                            {lastSession.breakdown.L > 0 && <div className="w-2 h-2 rounded-full bg-orange-400"></div>}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-gray-400 dark:text-gray-500 py-2 text-sm">No recent sessions found.</p>
+                                )}
+
+                                {/* Last Injection Block */}
+                                {lastInjection && (
+                                    <div className="flex items-center gap-4 p-3 rounded-xl bg-pink-50/50 dark:bg-pink-900/20 border border-pink-100 dark:border-pink-900">
+                                        <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500">
+                                            <Icon name="syringe" className="w-5 h-5" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-medium text-gray-800 dark:text-gray-100 text-sm">Injection Logged</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {formatDate(lastInjection.date)} • {formatTimeSafe(lastInjection.date)}
+                                            </p>
+                                        </div>
+                                        <div className="text-xs font-semibold text-pink-600 bg-pink-100 px-2 py-1 rounded-lg">
+                                            {lastInjection.site}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const renderActiveSession = () => {
+                const targetSeconds = userSettings.targetTime * 60; // Define variable for clarity
+                const progress = Math.min((sessionTimer / targetSeconds) * 100, 100);
+                const isComplete = sessionTimer >= targetSeconds;
+                const remainingSeconds = Math.max(0, targetSeconds - sessionTimer); // Calculate remaining
+
+                return (
+                    // MODIFIED: Removed obsolete 'pwa-content-offset' from the main div.
+                    <div className="h-full flex flex-col pb-20 relative animate-fade-in">
+                        {/* MODIFIED: Adjusted class to use the CSS variable for safe top positioning */}
+                        <button 
+                            onClick={cancelSession} 
+                            className="absolute left-4 p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-500 dark:text-gray-300 z-50 hover:bg-gray-200 dark:hover:bg-gray-700 pwa-safe-absolute-top"
+                        >
+                            <Icon name="x" className="w-5 h-5" />
+                        </button>
+                        
+                        {/* MODIFIED: Added flex-1 and pt-16 (to clear the absolute 'X' button) to force content to fill space */}
+                        <div className="flex-1 flex flex-col items-center justify-center relative pt-16">
+                            <div className="absolute inset-0 flex items-center justify-center -z-10 opacity-5">
+                                <BloomLogo className="w-64 h-64" />
+                            </div>
+                            <div className="w-64 h-64 rounded-full border-8 border-gray-100 dark:border-gray-800 flex items-center justify-center relative">
+                                <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                    <circle 
+                                        cx="50" cy="50" r="46" 
+                                        fill="none" 
+                                        stroke="currentColor" 
+                                        strokeWidth="8" 
+                                        className={`${isComplete ? 'text-green-500' : 'text-pink-500'} transition-all duration-1000`} 
+                                        strokeDasharray="289" 
+                                        strokeDashoffset={289 - (289 * progress) / 100} 
+                                    />
+                                </svg>
+                                <div className="text-center">
+                                    <p className={`text-6xl font-bold tabular-nums ${isComplete ? 'text-green-600 dark:text-green-400' : 'text-gray-800 dark:text-gray-50'}`}>
+                                        {formatTime(sessionTimer)}
+                                    </p>
+                                    <p className="text-gray-400 text-sm mt-1 mb-3">Total Time</p>
+                                    
+                                    {/* Remaining time countdown */}
+                                    {!isComplete && (
+                                        <div className="flex flex-col items-center">
+                                            <p className="text-gray-500 dark:text-gray-300 font-bold text-xl font-mono tabular-nums">
+                                                {formatTime(remainingSeconds)}
+                                            </p>
+                                            <p className="text-gray-400 dark:text-gray-500 text-xs font-medium">Time Left</p>
+                                        </div>
+                                    )}
+                                     {/* Completion Text */}
+                                    {isComplete && (
+                                        <p className="text-green-600 dark:text-green-400 font-bold text-xl mt-4">Completed!</p>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* Pause Button */}
+                            <div className="mt-8 z-20">
+                                <button 
+                                    onClick={() => setIsPaused(!isPaused)}
+                                    className="px-8 py-3 bg-gradient-to-tr from-purple-600 to-pink-500 text-white rounded-full shadow-lg active:scale-95 transition-transform flex items-center gap-2 mx-auto"
+                                >
+                                    <Icon name={isPaused ? "play" : "pause"} className="w-5 h-5" />
+                                    <span className="font-semibold">{isPaused ? "Resume" : "Pause"}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-6 z-10 mx-4 mb-4">
+                            <h3 className="text-center font-semibold text-gray-600 dark:text-gray-300 mb-6">Select Active Dilator</h3>
+                            <div className="flex justify-center gap-4 mb-8">
+                                <button onClick={() => setActiveSize(activeSize === 'S' ? null : 'S')} className={`flex-1 p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${activeSize === 'S' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-200' : 'border-gray-200 dark:border-gray-700 opacity-70'}`}>
+                                    <div className="h-14 flex items-center justify-center w-full">
+                                        <div className={`w-8 h-8 rounded-full bg-blue-500 shadow-sm ${activeSize === 'S' ? 'animate-pulse' : ''}`} />
+                                    </div>
+                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Small</span>
+                                    <span className="text-xs text-gray-400 font-mono">{formatTime(sizeTimers.S)}</span>
+                                </button>
+                                <button onClick={() => setActiveSize(activeSize === 'M' ? null : 'M')} className={`flex-1 p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${activeSize === 'M' ? 'border-green-500 bg-green-50 dark:bg-green-900/30 ring-2 ring-green-200' : 'border-gray-200 dark:border-gray-700 opacity-70'}`}>
+                                    <div className="h-14 flex items-center justify-center w-full">
+                                        <div className={`w-10 h-10 rounded-full bg-green-500 shadow-sm ${activeSize === 'M' ? 'animate-pulse' : ''}`} />
+                                    </div>
+                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Medium</span>
+                                    <span className="text-xs text-gray-400 font-mono">{formatTime(sizeTimers.M)}</span>
+                                </button>
+                                <button onClick={() => setActiveSize(activeSize === 'L' ? null : 'L')} className={`flex-1 p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${activeSize === 'L' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/30 ring-2 ring-orange-200' : 'border-gray-200 dark:border-gray-700 opacity-70'}`}>
+                                    <div className="h-14 flex items-center justify-center w-full">
+                                        <div className={`w-12 h-12 rounded-full bg-orange-500 shadow-sm ${activeSize === 'L' ? 'animate-pulse' : ''}`} />
+                                    </div>
+                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Large</span>
+                                    <span className="text-xs text-gray-400 font-mono">{formatTime(sizeTimers.L)}</span>
+                                </button>
+                            </div>
+                            <div className="space-y-3">
+                                <button onClick={stopSession} className="w-full bg-gradient-to-tr from-purple-600 to-pink-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform">
+                                    Finish Session
+                                </button>
+                                <button 
+                                    onClick={handleEmergencyStop} 
+                                    disabled={sessionTimer === 0}
+                                    className={`w-full font-bold text-sm py-2 transition-transform ${
+                                        sessionTimer === 0 
+                                            ? 'text-gray-300 cursor-not-allowed' 
+                                            : 'text-red-500 dark:text-red-400 active:scale-95'
+                                    }`}
+                                >
+                                    Report Issue / Emergency Stop
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const jump = 300; 
+                                        setSessionTimer(prev => prev + jump);
+                                        if (activeSize) {
+                                            setSizeTimers(prev => ({
+                                                ...prev,
+                                                [activeSize]: prev[activeSize] + jump
+                                            }));
+                                        }
+                                    }}
+                                    className="w-full text-gray-300 font-bold text-xs py-3 mt-2 hover:text-purple-500 transition-colors"
+                                >
+                                    [TEST] Advance Timer (+5m)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- Emergency Log Modal ---
+            const renderEmergencyModal = () => (
+                <div className="fixed inset-0 bg-red-900/20 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                   <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl border-2 border-red-100 dark:border-red-900">
+                       <div className="flex justify-between items-center mb-6">
+                           <div className="flex items-center gap-2">
+                               <div className="p-2 bg-red-100 rounded-full text-red-600"><Icon name="alertTriangle" className="w-5 h-5" /></div>
+                               <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50">Emergency Stop</h2>
+                           </div>
+                           <button onClick={() => setShowEmergencyModal(false)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300"><Icon name="x" className="w-5 h-5" /></button>
+                       </div>
+
+                       <p className="text-gray-600 dark:text-gray-400 mb-4">Please log why you are stopping the session early.</p>
+
+                       <div className="space-y-4">
+                           <div className="grid grid-cols-2 gap-2">
+                                {['High Pain', 'Bleeding/Discharge', 'Resistance', 'Discomfort', 'Obstruction', 'Other'].map(reason => (
+                                    <button
+                                        key={reason}
+                                        onClick={() => setEmergencyData({...emergencyData, reason: reason})}
+                                        className={`p-3 rounded-xl text-sm font-semibold transition-all text-left ${
+                                            emergencyData.reason === reason
+                                            ? 'bg-red-500 text-white shadow-md'
+                                            : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-200 hover:bg-red-50 dark:hover:bg-red-900/50'
+                                        }`}
+                                    >
+                                        {reason}
+                                    </button>
+                                ))}
+                           </div>
+
+                           <div>
+                               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Additional Details</label>
+                               <textarea 
+                                   value={emergencyData.notes}
+                                   onChange={(e) => setEmergencyData({...emergencyData, notes: e.target.value})}
+                                   className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-50 h-24 focus:border-red-500 focus:ring-1 focus:ring-red-200 outline-none"
+                                   placeholder="Describe what happened..."
+                               />
+                           </div>
+
+                           <button 
+                               onClick={saveEmergencyStop}
+                               disabled={!emergencyData.reason}
+                               className="w-full bg-red-500 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:shadow-none"
+                           >
+                               Log Emergency Stop
+                           </button>
+                       </div>
+                   </div>
+                </div>
+            );
+
+            const renderAftercare = () => (
+                <div className="fixed inset-0 bg-white dark:bg-gray-950 z-50 overflow-y-auto animate-slide-up">
+                    <div className="p-6 pb-32 max-w-lg mx-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-purple-900 dark:text-purple-300">Aftercare Check-in</h2>
+                            <button onClick={closeAftercare} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300"><Icon name="x" className="w-5 h-5" /></button>
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-400 mb-8">Great job taking care of yourself today. How did the session feel?</p>
+                        
+                        <div className="space-y-8 mb-8">
+                            <div>
+                                <div className="flex justify-between mb-2">
+                                    <label className="font-semibold text-gray-700 dark:text-gray-300">Pain Level</label>
+                                    <span className="text-purple-600 dark:text-purple-400 font-bold">{aftercareData.pain}/10</span>
+                                </div>
+                                <input type="range" min="0" max="10" value={aftercareData.pain} onChange={(e) => setAftercareData({...aftercareData, pain: parseInt(e.target.value)})} className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600" />
+                            </div>
+                            <div>
+                                <div className="flex justify-between mb-2">
+                                    <label className="font-semibold text-gray-700 dark:text-gray-300">Pressure Level</label>
+                                    <span className="text-purple-600 dark:text-purple-400 font-bold">{aftercareData.pressure}/10</span>
+                                </div>
+                                <input type="range" min="0" max="10" value={aftercareData.pressure} onChange={(e) => setAftercareData({...aftercareData, pressure: parseInt(e.target.value)})} className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600" />
+                            </div>
+                        </div>
+
+                        <div className="mb-8">
+                            <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-3">Emotions & Mood</label>
+                            <div className="flex flex-wrap gap-2">
+                                {['Relieved', 'Anxious', 'Proud', 'Tired', 'Happy', 'Uncomfortable', 'Peaceful'].map(mood => (
+                                    <button key={mood} onClick={() => {
+                                        const newMoods = aftercareData.mood.includes(mood) ? aftercareData.mood.filter(m => m !== mood) : [...aftercareData.mood, mood];
+                                        setAftercareData({...aftercareData, mood: newMoods});
+                                    }} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${aftercareData.mood.includes(mood) ? 'bg-pink-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>{mood}</button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mb-8">
+                            <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-3">Journal Notes</label>
+                            <textarea value={aftercareData.notes} onChange={(e) => setAftercareData({...aftercareData, notes: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none h-32 text-gray-900 dark:text-gray-50" placeholder="How are you feeling mentally? Any difficulties?" />
+                        </div>
+                        <button onClick={saveSession} className="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-purple-200 active:scale-95 transition-transform">Save Log</button>
+                    </div>
+                </div>
+            );
+
+            // --- Manual Entry Modal ---
+            const renderManualEntryModal = () => (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                   <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl overflow-y-auto max-h-[90vh]">
+                       <div className="flex justify-between items-center mb-6">
+                           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50">Log Past Session</h2>
+                           <button onClick={() => setShowManualEntry(false)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300"><Icon name="x" className="w-5 h-5" /></button>
+                       </div>
+
+                       <div className="space-y-4">
+                           {/* Type Selector */}
+                           <div className="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-xl">
+                               <button 
+                                   onClick={() => setManualEntry({...manualEntry, type: 'completed'})}
+                                   className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${manualEntry.type === 'completed' ? 'bg-white dark:bg-gray-900 shadow text-purple-600 dark:text-purple-400' : 'text-gray-500'}`}
+                               >
+                                   Completed
+                               </button>
+                               <button 
+                                   onClick={() => setManualEntry({...manualEntry, type: 'missed'})}
+                                   className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${manualEntry.type === 'missed' ? 'bg-white dark:bg-gray-900 shadow text-red-500' : 'text-gray-500'}`}
+                               >
+                                   Missed
+                               </button>
+                           </div>
+
+                           <div>
+                               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date & Time</label>
+                               <input 
+                                   type="datetime-local" 
+                                   value={manualEntry.date}
+                                   onChange={(e) => setManualEntry({...manualEntry, date: e.target.value})}
+                                   className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-50 appearance-none"
+                               />
+                           </div>
+
+                           {manualEntry.type === 'completed' && (
+                               <>
+                                   <div>
+                                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Duration (minutes)</label>
+                                       <input 
+                                           type="number" 
+                                           value={manualEntry.duration}
+                                           onChange={(e) => setManualEntry({...manualEntry, duration: e.target.value})}
+                                           className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-50 appearance-none"
+                                       />
+                                   </div>
+                                   
+                                   <div className="grid grid-cols-2 gap-4">
+                                       <div>
+                                           <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Pain: {manualEntry.pain}/10</label>
+                                           <input 
+                                               type="range" min="0" max="10" 
+                                               value={manualEntry.pain}
+                                               onChange={(e) => setManualEntry({...manualEntry, pain: parseInt(e.target.value)})}
+                                               className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                           />
+                                       </div>
+                                       <div>
+                                           <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Pressure: {manualEntry.pressure}/10</label>
+                                           <input 
+                                               type="range" min="0" max="10" 
+                                               value={manualEntry.pressure}
+                                               onChange={(e) => setManualEntry({...manualEntry, pressure: parseInt(e.target.value)})}
+                                               className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                           />
+                                       </div>
+                                   </div>
+                                   
+                                   {/* NEW: Emotions & Mood Selector */}
+                                    <div className="mb-4">
+                                        <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-3">Emotions & Mood</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {['Relieved', 'Anxious', 'Proud', 'Tired', 'Happy', 'Uncomfortable', 'Peaceful'].map(mood => (
+                                                <button 
+                                                    key={mood} 
+                                                    onClick={() => toggleManualMood(mood)} 
+                                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${manualEntry.mood.includes(mood) ? 'bg-pink-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                                                >
+                                                    {mood}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                               </>
+                           )}
+
+                           <div>
+                               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes / Reason</label>
+                               <textarea 
+                                   value={manualEntry.notes}
+                                   onChange={(e) => setManualEntry({...manualEntry, notes: e.target.value})}
+                                   className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-50 h-24"
+                                   placeholder={manualEntry.type === 'missed' ? "Why was it skipped?" : "Any notes..."}
+                               />
+                           </div>
+
+                           <button 
+                               onClick={saveManualEntry}
+                               className="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-transform"
+                           >
+                               Save Entry
+                           </button>
+                       </div>
+                   </div>
+                </div>
+            );
+
+            // --- Injections Page Logic ---
+            const renderInjections = () => (
+                <div className="pb-24 p-4 animate-fade-in">
+                    <div className="flex items-center gap-3 mb-6 pwa-content-offset">
+                        <button onClick={() => setActiveTab('home')} className="p-2 -ml-2 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><Icon name="chevronLeft" className="w-6 h-6" /></button>
+                        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">Injections</h2>
+                    </div>
+                    <button onClick={handleAddInjectionClick} className="w-full bg-pink-50 dark:bg-pink-900/50 text-pink-600 dark:text-pink-400 border border-pink-100 dark:border-pink-900 p-4 rounded-xl flex items-center justify-center gap-2 font-semibold mb-8 hover:bg-pink-100 dark:hover:bg-pink-900 transition-colors">
+                        <Icon name="plus" className="w-5 h-5" /> Log Injection Today
+                    </button>
+                    <div className="space-y-3">
+                        {injections.map(inj => (
+                            <div key={inj.id} className="flex items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 relative">
+                                <button 
+                                    onClick={() => deleteInjection(inj.id)} 
+                                    className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 bg-white/50 dark:bg-gray-700/50 hover:bg-red-50 rounded-full transition-colors z-10"
+                                    title="Delete Entry"
+                                >
+                                    <Icon name="trash2" className="w-4 h-4" />
+                                </button>
+                                <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500"><Icon name="syringe" className="w-5 h-5" /></div>
+                                <div>
+                                    <p className="font-bold text-gray-800 dark:text-gray-100">
+                                        {formatDate(inj.date)}
+                                        <span className="text-gray-400 font-normal text-xs ml-2">
+                                            {formatTimeSafe(inj.date)}
+                                        </span>
+                                    </p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">{inj.site}</p>
+                                </div>
+                            </div>
+                        ))}
+                        {injections.length === 0 && <p className="text-center text-gray-400 dark:text-gray-500">No injection logs found.</p>}
+                    </div>
+                </div>
+            );
+
+            // --- New Components for Injections ---
+            const renderInjectionSetup = () => (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50 mb-2">One-time Setup</h2>
+                        <p className="text-gray-500 dark:text-gray-400 mb-6">Where do you normally inject? We'll save this for next time.</p>
+                        
+                        <div className="space-y-3 mb-8">
+                            {['Left Thigh', 'Right Thigh', 'Stomach', 'Glutes', 'Arm'].map(site => (
+                                <button 
+                                    key={site}
+                                    onClick={() => toggleTempSite(site)}
+                                    className={`w-full p-4 rounded-xl border-2 flex justify-between items-center transition-all ${
+                                        tempInjectionSites.includes(site) 
+                                        ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300 font-semibold' 
+                                        : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-200'
+                                    }`}
+                                >
+                                    {site}
+                                    {tempInjectionSites.includes(site) && <Icon name="check" className="w-5 h-5 text-pink-500" />}
+                                </button>
+                            ))}
+                        </div>
+
+                        <button 
+                            onClick={saveInjectionPreferences}
+                            className="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-transform"
+                        >
+                            Save Preferences
+                        </button>
+                    </div>
+                </div>
+            );
+
+            const renderInjectionSelector = () => (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl mb-20 sm:mb-0">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-50">Log Injection</h2>
+                            <button onClick={() => setShowInjectionSelector(false)} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300"><Icon name="x" className="w-4 h-4" /></button>
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">Where did you inject today?</p>
+                        
+                        <div className="space-y-3">
+                            {(userSettings.injectionSites || []).map(site => (
+                                <button 
+                                    key={site}
+                                    onClick={() => confirmInjection(site)}
+                                    className="w-full p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-50 font-semibold hover:bg-pink-50 dark:hover:bg-pink-900/50 hover:border-pink-200 dark:hover:border-pink-900 hover:text-pink-600 transition-colors text-left flex items-center gap-3"
+                                >
+                                    <div className="w-2 h-2 rounded-full bg-pink-400"></div>
+                                    {site}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+
+
+            const renderHistory = () => {
+                // --- Grouping Logic ---
+                const groupedSessions = sessions.reduce((acc, session) => {
+                    const date = new Date(session.date);
+                    // Get beginning of week (Sunday)
+                    const day = date.getDay();
+                    const diff = date.getDate() - day; 
+                    const weekStart = new Date(date);
+                    weekStart.setDate(diff);
+                    weekStart.setHours(0,0,0,0);
+                    
+                    const key = weekStart.toDateString();
+                    
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(session);
+                    return acc;
+                }, {});
+                
+                // Sort keys (newest weeks first)
+                const sortedWeeks = Object.keys(groupedSessions).sort((a, b) => new Date(b) - new Date(a));
+                
+                const handleExpandAll = () => setExpandedWeeks({});
+                const handleCollapseAll = () => {
+                    const allCollapsed = sortedWeeks.reduce((acc, week) => ({...acc, [week]: false}), {});
+                    setExpandedWeeks(allCollapsed);
+                };
+
+                return (
+                    <div className="pb-24 space-y-6 animate-fade-in">
+                        {/* MODIFIED: Replaced p-4 and pwa-content-offset with specific px-4 pb-4 and pwa-sticky-top-pad */}
+                        <div className="flex flex-col bg-white dark:bg-gray-900 px-4 pb-4 sticky top-0 z-10 border-b border-gray-100 dark:border-gray-700 shadow-sm gap-2 pwa-sticky-top-pad">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => setActiveTab('home')} className="p-2 -ml-2 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><Icon name="chevronLeft" className="w-6 h-6" /></button>
+                                    <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">History</h2>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={handleManualEntryClick} className="p-2 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-gray-700 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-600 mr-1"><Icon name="plus" className="w-5 h-5" /></button>
+                                    <button onClick={exportData} className="p-2 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-gray-700 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-600"><Icon name="filetext" className="w-5 h-5" /></button>
+                                    <button onClick={() => window.print()} className="p-2 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600"><Icon name="download" className="w-5 h-5" /></button>
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-4 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                                <button onClick={handleExpandAll} className="hover:underline">Expand All</button>
+                                <button onClick={handleCollapseAll} className="hover:underline">Collapse All</button>
+                            </div>
+                        </div>
+                        
+                        <div className="px-4 space-y-8">
+                            {sessions.length === 0 && <div className="text-center text-gray-400 dark:text-gray-500 mt-10">No history yet. Start your first session!</div>}
+                            
+                            {sortedWeeks.map(weekKey => (
+                                <div key={weekKey} className="space-y-4">
+                                    {/* Week Header */}
+                                    <button 
+                                        onClick={() => toggleWeek(weekKey)}
+                                        className="flex items-center justify-between w-full text-left bg-gray-50 dark:bg-gray-800 p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    >
+                                        <span className="font-bold text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">
+                                            Week of {formatWeekHeader(weekKey)}
+                                        </span>
+                                        <Icon 
+                                            name="chevronDown" 
+                                            className={`w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform ${expandedWeeks[weekKey] === false ? '-rotate-90' : ''}`} 
+                                        />
+                                    </button>
+
+                                    {/* Sessions List for this Week */}
+                                    {(expandedWeeks[weekKey] !== false) && (
+                                        <div className="space-y-4 animate-fade-in">
+                                            {groupedSessions[weekKey].map(session => (
+                                                <div key={session.id} className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border print:border print:shadow-none ${session.isEmergency ? 'border-red-100 dark:border-red-900 bg-red-50/30 dark:bg-red-900/10' : session.isMissed ? 'border-red-100 dark:border-red-900 bg-red-50/30 dark:bg-red-900/10' : 'border-gray-100 dark:border-gray-700'} relative`}>
+                                                    <button 
+                                                        onClick={() => deleteSession(session.id)} 
+                                                        className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 bg-white/50 dark:bg-gray-800/50 hover:bg-red-50 rounded-full transition-colors z-10"
+                                                        title="Delete Entry"
+                                                    >
+                                                        <Icon name="trash2" className="w-4 h-4" />
+                                                    </button>
+                                                    <div className="flex justify-between items-start mb-3 pr-8">
+                                                        <div>
+                                                            <p className="font-bold text-gray-800 dark:text-gray-100">{formatDate(session.date)}</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(session.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {session.surgeryAge} Post-Op</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className={`block font-bold ${session.isEmergency || session.isMissed ? 'text-red-500 dark:text-red-400' : 'text-purple-600 dark:text-purple-400'}`}>{session.isEmergency ? 'STOP' : session.isMissed ? 'Missed' : Math.floor(session.duration / 60) + ' min'}</span>
+                                                            <span className="text-xs text-gray-400 dark:text-gray-500">Total</span>
+                                                        </div>
+                                                    </div>
+                                                    {!session.isMissed && (
+                                                        <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden flex mb-3">
+                                                            {session.breakdown.S > 0 && <div style={{width: `${(session.breakdown.S / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-blue-400'} h-full`}/>}
+                                                            {session.breakdown.M > 0 && <div style={{width: `${(session.breakdown.M / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-green-400'} h-full`}/>}
+                                                            {session.breakdown.L > 0 && <div style={{width: `${(session.breakdown.L / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-orange-400'} h-full`}/>}
+                                                            {/* Fallback for manual entries with no breakdown */}
+                                                            {(!session.breakdown.S && !session.breakdown.M && !session.breakdown.L) && <div className={`w-full ${session.isEmergency ? 'bg-red-400' : 'bg-purple-300'} h-full`}/>}
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {!session.isMissed && (
+                                                        <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 p-3 rounded-xl mb-3">
+                                                            <div className="flex items-center gap-2"><Icon name="frown" className="w-4 h-4 text-gray-400 dark:text-gray-500" /><span>Pain: {session.pain}/10</span></div>
+                                                            <div className="flex items-center gap-2"><Icon name="activity" className="w-4 h-4 text-gray-400 dark:text-gray-500" /><span>Pressure: {session.pressure}/10</span></div>
+                                                        </div>
+                                                    )}
+
+                                                    {session.isEmergency ? (
+                                                        <div className="flex flex-col gap-1 mb-2 p-2 bg-red-100 dark:bg-red-900 rounded-lg border border-red-200 dark:border-red-950">
+                                                            <div className="flex items-center gap-2 text-red-700 dark:text-red-300 font-bold text-xs uppercase tracking-wider">
+                                                                <Icon name="alertTriangle" className="w-3 h-3" /> Emergency Stop
+                                                            </div>
+                                                            <p className="text-sm text-red-800 dark:text-red-200 font-medium">{session.emergencyReason}</p>
+                                                        </div>
+                                                    ) : session.mood.length > 0 && (
+                                                        <div className="flex flex-wrap gap-2 mb-2">
+                                                            {session.mood.map(m => <span key={m} className={`text-xs px-2 py-1 rounded-md font-medium ${session.isMissed ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300' : 'bg-pink-50 dark:bg-pink-900/50 text-pink-600 dark:text-pink-300'}`}>{m}</span>)}
+                                                        </div>
+                                                    )}
+                                                    {session.notes && <p className="text-sm text-gray-500 dark:text-gray-400 italic mt-2 border-t border-gray-100 dark:border-gray-700 pt-2">"{session.notes}"</p>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            const renderSettings = () => (
+                <div className="pb-24 p-6 space-y-8 animate-fade-in pwa-content-offset">
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">Settings</h2>
+                    
+                    {/* --- THEME TOGGLE SETTING --- */}
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                         <div className="flex justify-between items-center">
+                            {/* UPDATED LABEL to Appearance */}
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Appearance</label>
+                            <div className="flex items-center gap-3">
+                                <div onClick={toggleTheme} className={`toggle-switch ${userSettings.theme}`}>
+                                    <div className="toggle-knob shadow-md">
+                                        {userSettings.theme === 'light' ? (
+                                            <Icon name="sun" className="w-4 h-4 text-orange-600" />
+                                        ) : (
+                                            <Icon name="moon" className="w-4 h-4 text-gray-900" />
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {/* --- END THEME TOGGLE SETTING --- */}
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your Name</label>
+                            <input type="text" value={userSettings.name} onChange={(e) => setUserSettings({...userSettings, name: e.target.value})} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Surgery Date</label>
+                            <input type="date" value={userSettings.surgeryDate} onChange={(e) => setUserSettings({...userSettings, surgeryDate: e.target.value})} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Used to calculate your post-op timeline.</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Target Session Duration (Minutes)</label>
+                            <input type="number" value={userSettings.targetTime} onChange={(e) => setUserSettings({...userSettings, targetTime: parseInt(e.target.value)})} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
+                        </div>
+                        {/* Daily Target Setting */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Daily Dilations Goal</label>
+                            <input type="number" value={userSettings.dailyTarget} onChange={(e) => setUserSettings({...userSettings, dailyTarget: parseInt(e.target.value)})} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
+                        </div>
+
+                        {/* Injection Site Settings */}
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Injection Sites</label>
+                            <div className="space-y-2">
+                                {['Left Thigh', 'Right Thigh', 'Stomach', 'Glutes', 'Arm'].map(site => (
+                                    <button 
+                                        key={site}
+                                        onClick={() => toggleSettingSite(site)}
+                                        className={`w-full p-3 rounded-xl border text-sm flex justify-between items-center transition-all ${
+                                            (userSettings.injectionSites || []).includes(site)
+                                            ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300 font-semibold' 
+                                            : 'border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                                        }`}
+                                    >
+                                        {site}
+                                        {(userSettings.injectionSites || []).includes(site) && <Icon name="check" className="w-4 h-4 text-pink-500" />}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
+                        <button onClick={() => { 
+                            // NOTE: Using custom UI modal instead of window.confirm()
+                            if(confirmCustomModal('Confirm Reset', 'Are you sure you want to clear all data? This cannot be undone.')) { 
+                                localStorage.clear(); 
+                                window.location.reload(); 
+                            }
+                        }} className="text-red-500 dark:text-red-400 text-sm font-medium flex items-center gap-2"><Icon name="trash2" className="w-4 h-4" /> Reset All Data</button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="max-w-md mx-auto bg-gray-50 dark:bg-gray-900 shadow-2xl min-h-screen relative font-sans">
+                    {/* Conditional Rendering of Landscape Warning or App Content */}
+                    {isLandscape ? (
+                        <LandscapeWarning isDark={userSettings.theme === 'dark'} />
+                    ) : (
+                        <div className="h-screen overflow-y-auto scrollbar-hide app-content">
+                            {/* Conditionally render wizard OR main app */}
+                            {!userSettings.isSetupComplete ? (
+                                renderSetupWizard()
+                            ) : (
+                                <>
+                                    {activeTab === 'home' && !isSessionActive && renderHome()}
+                                    {activeTab === 'track' && (isSessionActive || showAftercare) && !showAftercare && renderActiveSession()}
+                                    {activeTab === 'history' && !isSessionActive && renderHistory()}
+                                    {activeTab === 'injections' && !isSessionActive && renderInjections()}
+                                    {activeTab === 'settings' && !isSessionActive && renderSettings()}
+                                    {/* MODIFIED: Reduced the height of the placeholder div to h-0 since padding is now handled by the nav bar's pwa-safe-bottom class */}
+                                    <div className="h-0"></div> 
+                                    
+                                    {showAftercare && renderAftercare()}
+                                    {showManualEntry && renderManualEntryModal()}
+                                    {showEmergencyModal && renderEmergencyModal()}
+                                    {showInjectionSetup && renderInjectionSetup()}
+                                    {showInjectionSelector && renderInjectionSelector()}
+
+                                    {!isSessionActive && !showAftercare && (
+                                        <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center z-40 no-print pwa-safe-bottom">
+                                            <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                                                <Icon name="heart" className={`w-6 h-6 ${activeTab === 'home' ? 'fill-current' : ''}`} />
+                                                <span className="text-[10px] font-medium">Home</span>
+                                            </button>
+                                            <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'history' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                                                <Icon name="history" className={`w-6 h-6 ${activeTab === 'history' ? 'stroke-[2.5px] text-purple-600 dark:text-purple-400' : ''}`} />
+                                                <span className="text-[10px] font-medium">History</span>
+                                            </button>
+                                            <button onClick={startSession} className="mb-8 bg-gradient-to-tr from-purple-600 to-pink-500 text-white p-4 rounded-full shadow-lg hover:scale-105 transition-transform">
+                                                <Icon name="plus" className="w-8 h-8" />
+                                            </button>
+                                            <button onClick={() => setActiveTab('injections')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'injections' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                                                <Icon name="syringe" className={`w-6 h-6 ${activeTab === 'injections' ? 'fill-current' : ''}`} />
+                                                <span className="text-[10px] font-medium">Meds</span>
+                                            </button>
+                                            <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'settings' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                                                <Icon name="settings" className={`w-6 h-6 ${activeTab === 'settings' ? 'fill-current' : ''}`} />
+                                                <span className="text-[10px] font-medium">Settings</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<BloomApp />);
+    </script>
+</body>
+</html>
