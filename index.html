@@ -1395,20 +1395,28 @@
 
             // --- Injections Page Logic ---
             const renderInjections = () => (
-                // FIX: Removed redundant pt-4, relying entirely on pwa-content-offset for correct top spacing.
-                <div className="pb-24 px-4 animate-fade-in pwa-content-offset">
-                    <div className="flex items-center gap-3 mb-6">
-                        <button onClick={() => setActiveTab('home')} className="p-2 -ml-2 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><Icon name="chevronLeft" className="w-6 h-6" /></button>
-                        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">Injections</h2>
+                <div className="pb-32 px-4 animate-fade-in relative">
+                    
+                    {/* --- FIXED HEADER BLOCK --- */}
+                    <div className="fixed top-0 left-0 right-0 z-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] transition-all duration-300">
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setActiveTab('home')} className="p-2 -ml-2 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><Icon name="chevronLeft" className="w-6 h-6" /></button>
+                            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">Injections</h2>
+                        </div>
                     </div>
+
+                    {/* --- SPACER DIV --- */}
+                    <div className="pt-[calc(env(safe-area-inset-top)+4.5rem)]"></div>
+
+                    {/* Content */}
                     <button onClick={handleAddInjectionClick} className="w-full bg-pink-50 dark:bg-pink-900/50 text-pink-600 dark:text-pink-400 border border-pink-100 dark:border-pink-900 p-4 rounded-xl flex items-center justify-center gap-2 font-semibold mb-8 hover:bg-pink-100 dark:hover:bg-pink-900 transition-colors">
                         <Icon name="plus" className="w-5 h-5" /> Log Injection Today
                     </button>
                     <div className="space-y-3">
                         {injections.map(inj => (
                             <div key={inj.id} className="flex items-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 relative">
-                                <button
-                                    onClick={() => deleteInjection(inj.id)}
+                                <button 
+                                    onClick={() => deleteInjection(inj.id)} 
                                     className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 bg-white/50 dark:bg-gray-800/50 hover:bg-red-50 rounded-full transition-colors z-10"
                                     title="Delete Entry"
                                 >
@@ -1491,45 +1499,53 @@
 
 
             const renderHistory = () => (
-                <div className="pb-24 space-y-6 animate-fade-in">
-                    {/* MODIFIED: Replaced p-4 and pwa-content-offset with specific px-4 pb-4 and pwa-sticky-top-pad */}
-                    <div className="flex flex-col bg-white dark:bg-gray-900 px-4 pb-4 sticky top-0 z-10 border-b border-gray-100 dark:border-gray-700 shadow-sm gap-2 pwa-sticky-top-pad">
-                        <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <button onClick={() => setActiveTab('home')} className="p-2 -ml-2 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><Icon name="chevronLeft" className="w-6 h-6" /></button>
-                                <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">History</h2>
+                // Added pb-32 to ensure the last item clears the fixed bottom nav
+                <div className="pb-32 animate-fade-in relative">
+                    
+                    {/* --- FIXED HEADER BLOCK --- */}
+                    {/* z-20 ensures it slides UNDER the bottom nav (z-40) but OVER the content */}
+                    <div className="fixed top-0 left-0 right-0 z-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1rem)] transition-all duration-300">
+                        <div className="flex flex-col gap-2">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => setActiveTab('home')} className="p-2 -ml-2 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><Icon name="chevronLeft" className="w-6 h-6" /></button>
+                                    <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">History</h2>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={handleManualEntryClick} className="p-2 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-gray-700 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-600 mr-1"><Icon name="plus" className="w-5 h-5" /></button>
+                                    <button onClick={exportData} className="p-2 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-gray-700 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-600"><Icon name="filetext" className="w-5 h-5" /></button>
+                                    <button onClick={() => window.print()} className="p-2 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600"><Icon name="download" className="w-5 h-5" /></button>
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <button onClick={handleManualEntryClick} className="p-2 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-gray-700 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-600 mr-1"><Icon name="plus" className="w-5 h-5" /></button>
-                                <button onClick={exportData} className="p-2 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-gray-700 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-600"><Icon name="filetext" className="w-5 h-5" /></button>
-                                <button onClick={() => window.print()} className="p-2 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600"><Icon name="download" className="w-5 h-5" /></button>
+                            <div className="flex justify-end gap-4 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                                <button onClick={handleExpandAll} className="hover:underline">Expand All</button>
+                                <button onClick={handleCollapseAll} className="hover:underline">Collapse All</button>
                             </div>
-                        </div>
-                        <div className="flex justify-end gap-4 text-xs font-semibold text-purple-600 dark:text-purple-400">
-                            <button onClick={handleExpandAll} className="hover:underline">Expand All</button>
-                            <button onClick={handleCollapseAll} className="hover:underline">Collapse All</button>
                         </div>
                     </div>
 
+                    {/* --- SPACER DIV --- */}
+                    {/* Pushes content down. Height = Safe Area + approx 6.5rem (header height) */}
+                    <div className="pt-[calc(env(safe-area-inset-top)+6.5rem)]"></div>
+                    
                     <div className="px-4 space-y-8">
                         {sessions.length === 0 && <div className="text-center text-gray-400 dark:text-gray-500 mt-10">No history yet. Start your first session!</div>}
-
-
+                        
                         {Object.keys(sessions).length > 0 && (
                             <div className="space-y-8">
                                 {sortedWeeks.map(weekKey => (
                                     <div key={weekKey} className="space-y-4">
                                         {/* Week Header */}
-                                        <button
+                                        <button 
                                             onClick={() => toggleWeek(weekKey)}
                                             className="flex items-center justify-between w-full text-left bg-gray-50 dark:bg-gray-800 p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                         >
                                             <span className="font-bold text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">
                                                 Week of {formatWeekHeader(weekKey)}
                                             </span>
-                                            <Icon
-                                                name="chevronDown"
-                                                className={`w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform ${expandedWeeks[weekKey] === false ? '-rotate-90' : ''}`}
+                                            <Icon 
+                                                name="chevronDown" 
+                                                className={`w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform ${expandedWeeks[weekKey] === false ? '-rotate-90' : ''}`} 
                                             />
                                         </button>
 
@@ -1538,8 +1554,8 @@
                                             <div className="space-y-4 animate-fade-in">
                                                 {groupedSessions[weekKey].map(session => (
                                                     <div key={session.id} className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border print:border print:shadow-none ${session.isEmergency ? 'border-red-100 dark:border-red-900 bg-red-50/30 dark:bg-red-900/10' : session.isMissed ? 'border-red-100 dark:border-red-900 bg-red-50/30 dark:bg-red-900/10' : 'border-gray-100 dark:border-gray-700'} relative`}>
-                                                        <button
-                                                            onClick={() => deleteSession(session.id)}
+                                                        <button 
+                                                            onClick={() => deleteSession(session.id)} 
                                                             className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 bg-white/50 dark:bg-gray-800/50 hover:bg-red-50 rounded-full transition-colors z-10"
                                                             title="Delete Entry"
                                                         >
@@ -1548,7 +1564,7 @@
                                                         <div className="flex justify-between items-start mb-3 pr-8">
                                                             <div>
                                                                 <p className="font-bold text-gray-800 dark:text-gray-100">{formatDate(session.date)}</p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(session.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {session.surgeryAge} Post-Op</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(session.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} • {session.surgeryAge} Post-Op</p>
                                                             </div>
                                                             <div className="text-right">
                                                                 <span className={`block font-bold ${session.isEmergency || session.isMissed ? 'text-red-500 dark:text-red-400' : 'text-purple-600 dark:text-purple-400'}`}>{session.isEmergency ? 'STOP' : session.isMissed ? 'Missed' : Math.floor(session.duration / 60) + ' min'}</span>
@@ -1557,14 +1573,13 @@
                                                         </div>
                                                         {!session.isMissed && (
                                                             <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden flex mb-3">
-                                                                {session.breakdown.S > 0 && <div style={{ width: `${(session.breakdown.S / session.duration) * 100}%` }} className={`${session.isEmergency ? 'bg-red-400' : 'bg-blue-400'} h-full`} />}
-                                                                {session.breakdown.M > 0 && <div style={{ width: `${(session.breakdown.M / session.duration) * 100}%` }} className={`${session.isEmergency ? 'bg-red-400' : 'bg-green-400'} h-full`} />}
-                                                                {session.breakdown.L > 0 && <div style={{ width: `${(session.breakdown.L / session.duration) * 100}%` }} className={`${session.isEmergency ? 'bg-red-400' : 'bg-orange-400'} h-full`} />}
-                                                                {/* Fallback for manual entries with no breakdown */}
-                                                                {(!session.breakdown.S && !session.breakdown.M && !session.breakdown.L) && <div className={`w-full ${session.isEmergency ? 'bg-red-400' : 'bg-purple-300'} h-full`} />}
+                                                                {session.breakdown.S > 0 && <div style={{width: `${(session.breakdown.S / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-blue-400'} h-full`}/>}
+                                                                {session.breakdown.M > 0 && <div style={{width: `${(session.breakdown.M / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-green-400'} h-full`}/>}
+                                                                {session.breakdown.L > 0 && <div style={{width: `${(session.breakdown.L / session.duration) * 100}%`}} className={`${session.isEmergency ? 'bg-red-400' : 'bg-orange-400'} h-full`}/>}
+                                                                {(!session.breakdown.S && !session.breakdown.M && !session.breakdown.L) && <div className={`w-full ${session.isEmergency ? 'bg-red-400' : 'bg-purple-300'} h-full`}/>}
                                                             </div>
                                                         )}
-
+                                                        
                                                         {!session.isMissed && (
                                                             <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 p-3 rounded-xl mb-3">
                                                                 <div className="flex items-center gap-2"><Icon name="frown" className="w-4 h-4 text-gray-400 dark:text-gray-500" /><span>Pain: {session.pain}/10</span></div>
@@ -1598,78 +1613,86 @@
             );
 
             const renderSettings = () => (
-                // MODIFIED: Removed pt-6 and rely solely on pwa-content-offset for top padding (which now includes 1.5rem base)
-                <div className="pb-24 px-6 space-y-8 animate-fade-in pwa-content-offset">
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">Settings</h2>
+                <div className="pb-32 px-6 animate-fade-in relative">
+                    
+                    {/* --- FIXED HEADER BLOCK --- */}
+                    <div className="fixed top-0 left-0 right-0 z-20 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 px-6 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] transition-all duration-300">
+                        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-50">Settings</h2>
+                    </div>
 
-                    {/* --- THEME TOGGLE SETTING --- */}
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                        <div className="flex justify-between items-center">
-                            {/* UPDATED LABEL to Appearance */}
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Appearance</label>
-                            <div className="flex items-center gap-3">
-                                <div onClick={toggleTheme} className={`toggle-switch ${userSettings.theme}`}>
-                                    <div className="toggle-knob shadow-md">
-                                        {userSettings.theme === 'light' ? (
-                                            <Icon name="sun" className="w-4 h-4 text-orange-600" />
-                                        ) : (
-                                            <Icon name="moon" className="w-4 h-4 text-gray-900" />
-                                        )}
+                    {/* --- SPACER DIV --- */}
+                    <div className="pt-[calc(env(safe-area-inset-top)+4.5rem)]"></div>
+
+                    {/* Content */}
+                    <div className="space-y-8">
+                        {/* --- THEME TOGGLE SETTING --- */}
+                        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                             <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Appearance</label>
+                                <div className="flex items-center gap-3">
+                                    <div onClick={toggleTheme} className={`toggle-switch ${userSettings.theme}`}>
+                                        <div className="toggle-knob shadow-md">
+                                            {userSettings.theme === 'light' ? (
+                                                <Icon name="sun" className="w-4 h-4 text-orange-600" />
+                                            ) : (
+                                                <Icon name="moon" className="w-4 h-4 text-gray-900" />
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    {/* --- END THEME TOGGLE SETTING --- */}
+                        {/* --- END THEME TOGGLE SETTING --- */}
 
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your Name</label>
-                            <input type="text" value={userSettings.name} onChange={(e) => setUserSettings({ ...userSettings, name: e.target.value })} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Surgery Date</label>
-                            <input type="date" value={userSettings.surgeryDate} onChange={(e) => setUserSettings({ ...userSettings, surgeryDate: e.target.value })} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Used to calculate your post-op timeline.</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Target Session Duration (Minutes)</label>
-                            <input type="number" value={userSettings.targetTime} onChange={(e) => setUserSettings({ ...userSettings, targetTime: parseInt(e.target.value) })} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
-                        </div>
-                        {/* Daily Target Setting */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Daily Dilations Goal</label>
-                            <input type="number" value={userSettings.dailyTarget} onChange={(e) => setUserSettings({ ...userSettings, dailyTarget: parseInt(e.target.value) })} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
-                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your Name</label>
+                                <input type="text" value={userSettings.name} onChange={(e) => setUserSettings({...userSettings, name: e.target.value})} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Surgery Date</label>
+                                <input type="date" value={userSettings.surgeryDate} onChange={(e) => setUserSettings({...userSettings, surgeryDate: e.target.value})} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Used to calculate your post-op timeline.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Target Session Duration (Minutes)</label>
+                                <input type="number" value={userSettings.targetTime} onChange={(e) => setUserSettings({...userSettings, targetTime: parseInt(e.target.value)})} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
+                            </div>
+                            {/* Daily Target Setting */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Daily Dilations Goal</label>
+                                <input type="number" value={userSettings.dailyTarget} onChange={(e) => setUserSettings({...userSettings, dailyTarget: parseInt(e.target.value)})} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
+                            </div>
 
-                        {/* Injection Site Settings */}
-                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Injection Sites</label>
-                            <div className="space-y-2">
-                                {['Left Thigh', 'Right Thigh', 'Stomach', 'Glutes', 'Arm'].map(site => (
-                                    <button
-                                        key={site}
-                                        onClick={() => toggleSettingSite(site)}
-                                        className={`w-full p-3 rounded-xl border text-sm flex justify-between items-center transition-all ${(userSettings.injectionSites || []).includes(site)
-                                            ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300 font-semibold'
-                                            : 'border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                            {/* Injection Site Settings */}
+                            <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Injection Sites</label>
+                                <div className="space-y-2">
+                                    {['Left Thigh', 'Right Thigh', 'Stomach', 'Glutes', 'Arm'].map(site => (
+                                        <button 
+                                            key={site}
+                                            onClick={() => toggleSettingSite(site)}
+                                            className={`w-full p-3 rounded-xl border text-sm flex justify-between items-center transition-all ${
+                                                (userSettings.injectionSites || []).includes(site)
+                                                ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300 font-semibold' 
+                                                : 'border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400'
                                             }`}
-                                    >
-                                        {site}
-                                        {(userSettings.injectionSites || []).includes(site) && <Icon name="check" className="w-4 h-4 text-pink-500" />}
-                                    </button>
-                                ))}
+                                        >
+                                            {site}
+                                            {(userSettings.injectionSites || []).includes(site) && <Icon name="check" className="w-4 h-4 text-pink-500" />}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
-                        <button onClick={() => {
-                            // NOTE: Using window.confirm() here, ideally should be replaced by custom UI modal (as per instructions)
-                            if (window.confirm('Are you sure you want to clear all data?')) {
-                                localStorage.clear();
-                                window.location.reload();
-                            }
-                        }} className="text-red-500 dark:text-red-400 text-sm font-medium flex items-center gap-2"><Icon name="trash2" className="w-4 h-4" /> Reset All Data</button>
+                        <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
+                            <button onClick={() => { 
+                                if(window.confirm('Are you sure you want to clear all data?')) { 
+                                    localStorage.clear(); 
+                                    window.location.reload(); 
+                                }
+                            }} className="text-red-500 dark:text-red-400 text-sm font-medium flex items-center gap-2"><Icon name="trash2" className="w-4 h-4" /> Reset All Data</button>
+                        </div>
                     </div>
                 </div>
             );
@@ -1701,8 +1724,8 @@
                                     {showInjectionSelector && renderInjectionSelector()}
 
                                     {!isSessionActive && !showAftercare && (
-                                        // CHANGED: 'absolute' -> 'fixed'. Added 'backdrop-blur-md' and opacity (/90) for glass effect.
-                                        <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center z-40 no-print pwa-safe-bottom transition-all duration-300">
+                                        // CHANGED: Adjusted to 1rem for the perfect balance
+                                        <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] flex justify-between items-center z-40 no-print transition-all duration-300">
                                             <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`}>
                                                 <Icon name="heart" className={`w-6 h-6 ${activeTab === 'home' ? 'fill-current' : ''}`} />
                                                 <span className="text-[10px] font-medium">Home</span>
@@ -1713,7 +1736,6 @@
                                             </button>
                                             
                                             {/* Floating Start Button */}
-                                            {/* Adjusted margin to sit nicely within the fixed bar */}
                                             <button onClick={startSession} className="-mt-12 bg-gradient-to-tr from-purple-600 to-pink-500 text-white p-4 rounded-full shadow-lg hover:scale-105 transition-transform ring-4 ring-gray-50 dark:ring-gray-900">
                                                 <Icon name="plus" className="w-8 h-8" />
                                             </button>
@@ -1727,8 +1749,7 @@
                                                 <span className="text-[10px] font-medium">Settings</span>
                                             </button>
                                         </div>
-                                    )}
-                                </>
+                                    )}                            </>
                             )}
                         </div>
                     )}
