@@ -485,8 +485,15 @@
             // --- ORIENTATION EFFECT ---
             useEffect(() => {
                 const checkOrientation = () => {
-                    // Check if width is greater than height
-                    setIsLandscape(window.innerWidth > window.innerHeight && window.innerWidth > 600); // Only trigger for typical mobile size range/aspect ratio flip
+                    // Check if it is a mobile device to enforce portrait mode
+                    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                    
+                    // If it's mobile and width > height, show warning. Otherwise (PC/Desktop), allow it.
+                    if (isMobile) {
+                        setIsLandscape(window.innerWidth > window.innerHeight); 
+                    } else {
+                        setIsLandscape(false);
+                    }
                 };
 
                 checkOrientation();
@@ -1277,7 +1284,8 @@
 
             const renderAftercare = () => (
                 <div className="fixed inset-0 bg-white dark:bg-gray-950 z-50 overflow-y-auto animate-slide-up">
-                    <div className="p-6 pb-32 max-w-lg mx-auto">
+                    {/* MODIFIED: Replaced p-6 with px-6 pt-[calc(1.5rem+env(safe-area-inset-top))] to ensure safe area padding */}
+                    <div className="px-6 pb-32 max-w-lg mx-auto pt-[calc(1.5rem+env(safe-area-inset-top))]">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-purple-900 dark:text-purple-300">Aftercare Check-in</h2>
                             <button onClick={closeAftercare} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300"><Icon name="x" className="w-5 h-5" /></button>
@@ -1819,4 +1827,4 @@
     </script>
 </body>
 
-</html>
+</html> // -- End of index.html
