@@ -394,6 +394,97 @@
             osc.stop(t + 2);
         };
 
+        // --- DEMO DATA CONSTANT ---
+        const DILATOR_BREAKDOWNS = [
+            // 20 minutes total (in seconds)
+            // 1. Balanced progression (S, M, L)
+            { S: 5 * 60, M: 10 * 60, L: 5 * 60 },
+            // 2. Focused on Medium (M, L)
+            { S: 0, M: 12 * 60, L: 8 * 60 },
+            // 3. Difficult day, staying mostly Small (S, M)
+            { S: 10 * 60, M: 10 * 60, L: 0 },
+            // 4. Advanced, mostly Large
+            { S: 0, M: 5 * 60, L: 15 * 60 },
+            // 5. Short progression to large
+            { S: 3 * 60, M: 4 * 60, L: 13 * 60 },
+        ];
+
+        const getRandomDilatorBreakdown = () => {
+            const index = Math.floor(Math.random() * DILATOR_BREAKDOWNS.length);
+            return DILATOR_BREAKDOWNS[index];
+        };
+
+        const LOAD_DEMO_DATA = () => {
+            // Calculate a surgery date roughly 4 months ago for varied "Post-Op" display
+            const now = new Date();
+            const surgeryDate = new Date(now);
+            surgeryDate.setMonth(now.getMonth() - 4);
+            const surgeryDateIso = surgeryDate.toISOString().split('T')[0];
+            
+            // Generate session dates (last week)
+            const sessions = [];
+            const dayInMs = 24 * 60 * 60 * 1000;
+            
+            // Start from 5 days ago (to ensure it's not "Today" unless user manually runs a session)
+            for (let i = 5; i >= 0; i--) {
+                const date = new Date(now.getTime() - i * dayInMs);
+                const dateIso = date.toISOString();
+                
+                // Completed session
+                const breakdown = getRandomDilatorBreakdown();
+
+                sessions.push({
+                    id: date.getTime(),
+                    date: dateIso,
+                    duration: 20 * 60, // Fixed duration for simplicity
+                    breakdown: breakdown,
+                    pain: Math.floor(Math.random() * 3), // Low pain
+                    pressure: Math.floor(Math.random() * 4), // Moderate pressure
+                    mood: ['Relieved', 'Happy'],
+                    notes: `Routine dilation session. Feeling good about progress.`,
+                    surgeryAge: 'Demo Age',
+                });
+                
+                // Missed session on one specific day
+                if (i === 3) {
+                    sessions.push({
+                        id: date.getTime() + 1,
+                        date: dateIso,
+                        duration: 0,
+                        breakdown: { S: 0, M: 0, L: 0 },
+                        pain: 0,
+                        pressure: 0,
+                        mood: ['Skipped'],
+                        notes: `Skipped due to unexpected evening commitment.`,
+                        surgeryAge: 'Demo Age',
+                        isMissed: true
+                    });
+                }
+            }
+
+            // Injections (last two weeks)
+            const injections = [
+                { id: 3, date: new Date(now.getTime() - 2 * dayInMs).toISOString(), site: 'Left Thigh' },
+                { id: 2, date: new Date(now.getTime() - 9 * dayInMs).toISOString(), site: 'Right Thigh' },
+                { id: 1, date: new Date(now.getTime() - 15 * dayInMs).toISOString(), site: 'Stomach' },
+            ];
+
+            return {
+                sessions: sessions.sort((a, b) => new Date(b.date) - new Date(a.date)),
+                injections: injections.sort((a, b) => new Date(b.date) - new Date(a.date)),
+                settings: {
+                    surgeryDate: surgeryDateIso,
+                    targetTime: 20,
+                    dailyTarget: 3,
+                    name: 'Test Patient',
+                    injectionSites: ['Left Thigh', 'Right Thigh', 'Stomach'],
+                    isSetupComplete: true,
+                    theme: 'light',
+                }
+            };
+        };
+        // --- END DEMO DATA CONSTANT ---
+
         // --- Main App ---
         function BloomApp() {
             const [activeTab, setActiveTab] = useState('home');
@@ -841,6 +932,31 @@
                 a.download = `bloom_export_${new Date().toISOString().split('T')[0]}.csv`;
                 a.click();
             };
+            
+            // --- NEW: Load Demo Data Handler ---
+            const loadDemoData = () => {
+                const demoData = LOAD_DEMO_DATA();
+                
+                // NOTE: Using window.confirm() here, ideally should be replaced by custom UI modal
+                const overwrite = sessions.length > 0 || injections.length > 0;
+                if (overwrite && !window.confirm("This will overwrite all existing data. Are you sure?")) {
+                    return;
+                }
+
+                // 1. Update localStorage
+                localStorage.setItem('bloom_sessions', JSON.stringify(demoData.sessions));
+                localStorage.setItem('bloom_injections', JSON.stringify(demoData.injections));
+                localStorage.setItem('bloom_settings', JSON.stringify(demoData.settings));
+                
+                // 2. Update React state to trigger re-render
+                setSessions(demoData.sessions);
+                setInjections(demoData.injections);
+                setUserSettings(demoData.settings);
+                
+                // 3. Navigate to Home
+                setActiveTab('home');
+            };
+            // --- END NEW: Load Demo Data Handler ---
 
             // --- Helpers for Render ---
             const getDailyCount = () => {
@@ -1048,7 +1164,7 @@
                                 </button>
                                 <button onClick={() => setActiveTab('history')} className="p-4 bg-white dark:bg-gray-700 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-100 rounded-2xl shadow-sm active:scale-95 transition-all flex flex-col items-center justify-center gap-2 h-32">
                                     <div className="p-2 bg-gray-50 dark:bg-gray-600 rounded-full text-purple-600 dark:text-purple-400"><Icon name="history" className="w-6 h-6" /></div>
-                                    <span className="font-semibold text-sm">View History</span>
+                                    <span className="text-sm font-semibold">View History</span>
                                 </button>
                             </div>
 
@@ -1749,7 +1865,16 @@
                                 </div>
                             </div>
                         </div>
-                        <div className="pt-8 border-t border-gray-100 dark:border-gray-700">
+                        
+                        {/* NEW: Demo Data Load Button */}
+                        <div className="pt-8 border-t border-gray-100 dark:border-gray-700 space-y-4">
+                            <button 
+                                onClick={loadDemoData}
+                                className="w-full text-blue-500 dark:text-blue-400 text-sm font-medium flex items-center justify-center gap-2 bg-blue-50 dark:bg-gray-700 py-3 rounded-xl hover:bg-blue-100 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                <Icon name="download" className="w-4 h-4" /> Load Demo Data
+                            </button>
+
                             <button onClick={() => {
                                 if (window.confirm('Are you sure you want to clear all data?')) {
                                     localStorage.clear();
