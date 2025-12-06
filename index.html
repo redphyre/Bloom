@@ -110,7 +110,8 @@
         }
 
         input[type="date"],
-        input[type="datetime-local"] {
+        input[type="datetime-local"],
+        input[type="time"] {
             -webkit-appearance: none;
             appearance: none;
             min-height: 3rem;
@@ -224,7 +225,7 @@
                 heart: <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />,
                 settings: <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l-.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />,
                 plus: <path d="M5 12h14 M12 5v14" />,
-                minus: <path d="M5 12h14" />, // ADDED MINUS ICON
+                minus: <path d="M5 12h14" />, 
                 history: <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5 M12 7v5l4 2" />,
                 chevronLeft: <path d="m15 18-6-6 6-6" />,
                 chevronDown: <path d="m6 9 6 6 6-6" />,
@@ -254,6 +255,7 @@
                 rotateCw: <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5 M12 16v-4l-4-2" />,
                 // A simplified phone/tablet icon for the warning
                 tabletLandscape: <rect width="20" height="15" x="2" y="4.5" rx="3" ry="3" />,
+                clock: <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />,
             };
 
             return (
@@ -369,6 +371,24 @@
             }
         };
 
+        const generateDefaultSchedule = (count) => {
+            // Default logical times spread through the day (8am to 8pm roughly)
+            const times = [];
+            const startHour = 8; 
+            const endHour = 20;
+            
+            if (count === 1) return ["12:00"];
+            if (count === 2) return ["09:00", "19:00"];
+            
+            const step = Math.floor((endHour - startHour) / (count - 1));
+            for (let i = 0; i < count; i++) {
+                const hour = startHour + (i * step);
+                const timeString = `${hour < 10 ? '0' : ''}${hour}:00`;
+                times.push(timeString);
+            }
+            return times;
+        };
+
         // --- Sound Helper ---
         const playCompletionSound = () => {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -417,6 +437,15 @@
             ['Proud', 'Happy', 'Relieved'],
         ];
 
+        const CLINICAL_MODIFIERS = [
+            ['Wet-to-Dry', 'Lidocaine'],
+            ['Xeroform'],
+            ['Betamethasone', 'Standard Lube'],
+            ['Standard Lube'],
+            ['Wet-to-Dry'],
+            [], // None
+        ];
+
         const SESSION_NOTES = [
             "Good session today, felt minimal resistance on the last size.",
             "A bit of soreness afterward, but overall very successful. Hit target time easily.",
@@ -454,6 +483,7 @@
                         pain: Math.floor(Math.random() * 3), // Low pain
                         pressure: Math.floor(Math.random() * 4), // Moderate pressure
                         mood: getRandomElement(MOOD_COMBINATIONS),
+                        modifiers: getRandomElement(CLINICAL_MODIFIERS),
                         notes: getRandomElement(SESSION_NOTES),
                         surgeryAge: 'Demo Age',
                     });
@@ -469,6 +499,7 @@
                         pain: 0,
                         pressure: 0,
                         mood: ['Skipped'],
+                        modifiers: [],
                         notes: `Skipped due to being sick/flu symptoms.`,
                         surgeryAge: 'Demo Age',
                         isMissed: true
@@ -485,6 +516,7 @@
                         pain: 9, 
                         pressure: 8,
                         mood: ['Emergency'],
+                        modifiers: ['Wet-to-Dry'],
                         notes: `Emergency stop: High pain/bleeding noted when attempting to transition to next size.`,
                         surgeryAge: 'Demo Age',
                         isEmergency: true,
@@ -506,7 +538,8 @@
                 settings: {
                     surgeryDate: surgeryDateIso,
                     targetTime: 20,
-                    dailyTarget: 3,
+                    dailyTarget: 4, // Changed default to 4 as per request
+                    schedule: ["08:00", "12:00", "16:00", "20:00"], // 4 times default
                     name: 'Test Patient',
                     injectionSites: ['Left Thigh', 'Right Thigh', 'Stomach'],
                     isSetupComplete: true,
@@ -537,7 +570,8 @@
                 const defaults = {
                     surgeryDate: '',
                     targetTime: 20,
-                    dailyTarget: 3,
+                    dailyTarget: 4, // Default to 4
+                    schedule: ["08:00", "12:00", "16:00", "20:00"], // Default 4 slots
                     name: '',
                     injectionSites: [],
                     isSetupComplete: false,
@@ -548,8 +582,15 @@
                     const parsed = JSON.parse(saved);
                     // If returning user has a name, assume setup is complete
                     const isSetup = parsed.isSetupComplete || (parsed.name && parsed.name !== 'Patient');
+                    
+                    // Backfill schedule if missing
+                    let schedule = parsed.schedule;
+                    if (!schedule || schedule.length === 0) {
+                        schedule = generateDefaultSchedule(parsed.dailyTarget || 4);
+                    }
+
                     // Ensure theme defaults to 'light' if not saved
-                    return { ...defaults, ...parsed, isSetupComplete: isSetup, theme: parsed.theme || 'light' };
+                    return { ...defaults, ...parsed, schedule, isSetupComplete: isSetup, theme: parsed.theme || 'light' };
                 }
                 return defaults;
             });
@@ -594,6 +635,7 @@
                 pain: 0,
                 pressure: 0,
                 mood: [],
+                modifiers: [], // NEW: Clinical Modifiers
                 notes: ''
             });
 
@@ -744,7 +786,7 @@
                     setShowAftercare(false);
                     setSessionTimer(0);
                     setSizeTimers({ S: 0, M: 0, L: 0 });
-                    setAftercareData({ pain: 0, pressure: 0, mood: [], notes: '' });
+                    setAftercareData({ pain: 0, pressure: 0, mood: [], modifiers: [], notes: '' });
                     setActiveTab('home');
                 }
             };
@@ -762,7 +804,7 @@
                 setShowAftercare(false);
                 setSessionTimer(0);
                 setSizeTimers({ S: 0, M: 0, L: 0 });
-                setAftercareData({ pain: 0, pressure: 0, mood: [], notes: '' });
+                setAftercareData({ pain: 0, pressure: 0, mood: [], modifiers: [], notes: '' });
                 setActiveTab('history');
             };
 
@@ -1085,24 +1127,52 @@
                                         </button>
                                     </div>
                                 </div>
-                                {/* MODIFIED: Stepper UI for Daily Goal */}
+                                {/* MODIFIED: Stepper UI for Daily Goal + Auto Schedule */}
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Daily Goal</label>
                                     <div className="flex items-center justify-between h-12 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 px-1">
                                         <button 
-                                            onClick={() => setUserSettings(prev => ({ ...prev, dailyTarget: Math.max(1, prev.dailyTarget - 1) }))}
+                                            onClick={() => {
+                                                const newTarget = Math.max(1, userSettings.dailyTarget - 1);
+                                                setUserSettings(prev => ({ ...prev, dailyTarget: newTarget, schedule: generateDefaultSchedule(newTarget) }));
+                                            }}
                                             className="w-10 h-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 active:scale-90 transition-transform"
                                         >
                                             <Icon name="minus" className="w-5 h-5" />
                                         </button>
                                         <span className="font-bold text-gray-900 dark:text-gray-50">{userSettings.dailyTarget} <span className="text-xs font-normal text-gray-400">/ day</span></span>
                                         <button 
-                                            onClick={() => setUserSettings(prev => ({ ...prev, dailyTarget: prev.dailyTarget + 1 }))}
+                                            onClick={() => {
+                                                const newTarget = Math.min(5, userSettings.dailyTarget + 1); // Max 5 sessions
+                                                setUserSettings(prev => ({ ...prev, dailyTarget: newTarget, schedule: generateDefaultSchedule(newTarget) }));
+                                            }}
                                             className="w-10 h-full flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 active:scale-90 transition-transform"
                                         >
                                             <Icon name="plus" className="w-5 h-5" />
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                            
+                            {/* Schedule Preview in Wizard */}
+                            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700">
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Planned Schedule</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {(userSettings.schedule || []).map((time, idx) => (
+                                        <div key={idx} className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-lg">
+                                            <Icon name="clock" className="w-4 h-4 text-purple-400" />
+                                            <input 
+                                                type="time" 
+                                                value={time}
+                                                onChange={(e) => {
+                                                    const newSchedule = [...userSettings.schedule];
+                                                    newSchedule[idx] = e.target.value;
+                                                    setUserSettings(prev => ({...prev, schedule: newSchedule}));
+                                                }}
+                                                className="bg-transparent text-sm font-semibold text-gray-700 dark:text-gray-200 outline-none w-full"
+                                            />
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
@@ -1123,7 +1193,7 @@
                 const lastSession = sessions[0];
                 const lastInjection = injections[0];
                 const dailyCount = getDailyCount();
-                const dailyTarget = userSettings.dailyTarget || 3;
+                const dailyTarget = userSettings.dailyTarget || 4;
                 const dailyProgress = Math.min((dailyCount / dailyTarget) * 100, 100);
 
                 return (
@@ -1453,6 +1523,25 @@
                                     <span className="text-purple-600 dark:text-purple-400 font-bold">{aftercareData.pressure}/10</span>
                                 </div>
                                 <input type="range" min="0" max="10" value={aftercareData.pressure} onChange={(e) => setAftercareData({ ...aftercareData, pressure: parseInt(e.target.value) })} className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600" />
+                            </div>
+                        </div>
+
+                        {/* NEW: Clinical & Supplies Section */}
+                        <div className="mb-8">
+                            <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-3">Clinical & Supplies</label>
+                            <div className="flex flex-wrap gap-2">
+                                {['Wet-to-Dry Gauze', 'Xeroform', 'Betamethasone', 'Lidocaine', 'Standard Lube'].map(mod => (
+                                    <button 
+                                        key={mod} 
+                                        onClick={() => {
+                                            const newMods = aftercareData.modifiers.includes(mod) ? aftercareData.modifiers.filter(m => m !== mod) : [...aftercareData.modifiers, mod];
+                                            setAftercareData({ ...aftercareData, modifiers: newMods });
+                                        }} 
+                                        className={`px-4 py-2 rounded-full text-xs font-semibold transition-colors border ${aftercareData.modifiers.includes(mod) ? 'bg-blue-100 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                    >
+                                        {mod}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
@@ -1801,9 +1890,14 @@
                                                                     </div>
                                                                     <p className="text-sm text-red-800 dark:text-red-200 font-medium">{session.emergencyReason}</p>
                                                                 </div>
-                                                            ) : session.mood.length > 0 && (
+                                                            ) : (
+                                                                // Moods & Modifiers
                                                                 <div className="flex flex-wrap gap-2 mb-2">
+                                                                    {/* Moods */}
                                                                     {session.mood.map(m => <span key={m} className={`text-xs px-2 py-1 rounded-md font-medium ${session.isMissed ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300' : 'bg-pink-50 dark:bg-pink-900/50 text-pink-600 dark:text-pink-300'}`}>{m}</span>)}
+                                                                    
+                                                                    {/* Modifiers */}
+                                                                    {(session.modifiers || []).map(mod => <span key={mod} className="text-xs px-2 py-1 rounded-md font-medium bg-blue-50 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 border border-blue-100 dark:border-blue-800">{mod}</span>)}
                                                                 </div>
                                                             )}
                                                             {session.notes && <p className="text-sm text-gray-500 dark:text-gray-400 italic mt-2 border-t border-gray-100 dark:border-gray-700 pt-2">"{session.notes}"</p>}
@@ -1872,9 +1966,54 @@
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Target Session Duration (Minutes)</label>
                                 <input type="number" value={userSettings.targetTime} onChange={(e) => setUserSettings({ ...userSettings, targetTime: parseInt(e.target.value) })} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Daily Dilations Goal</label>
-                                <input type="number" value={userSettings.dailyTarget} onChange={(e) => setUserSettings({ ...userSettings, dailyTarget: parseInt(e.target.value) })} className="w-full h-12 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 appearance-none" />
+                            
+                            {/* Schedule Settings */}
+                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 p-4">
+                                <div className="flex justify-between items-center mb-3">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Daily Goal</label>
+                                    <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={() => {
+                                                const newTarget = Math.max(1, userSettings.dailyTarget - 1);
+                                                setUserSettings(prev => ({ ...prev, dailyTarget: newTarget, schedule: generateDefaultSchedule(newTarget) }));
+                                            }}
+                                            className="w-8 h-8 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg text-gray-500 hover:text-purple-500 shadow-sm transition-colors"
+                                        >
+                                            <Icon name="minus" className="w-4 h-4" />
+                                        </button>
+                                        <span className="font-bold text-gray-900 dark:text-gray-100">{userSettings.dailyTarget}</span>
+                                        <button 
+                                            onClick={() => {
+                                                const newTarget = Math.min(5, userSettings.dailyTarget + 1);
+                                                setUserSettings(prev => ({ ...prev, dailyTarget: newTarget, schedule: generateDefaultSchedule(newTarget) }));
+                                            }}
+                                            className="w-8 h-8 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg text-gray-500 hover:text-purple-500 shadow-sm transition-colors"
+                                        >
+                                            <Icon name="plus" className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-2">Target Times</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(userSettings.schedule || []).map((time, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 rounded-lg">
+                                                <Icon name="clock" className="w-4 h-4 text-purple-400" />
+                                                <input 
+                                                    type="time" 
+                                                    value={time}
+                                                    onChange={(e) => {
+                                                        const newSchedule = [...userSettings.schedule];
+                                                        newSchedule[idx] = e.target.value;
+                                                        setUserSettings(prev => ({...prev, schedule: newSchedule}));
+                                                    }}
+                                                    className="bg-transparent text-sm font-semibold text-gray-700 dark:text-gray-200 outline-none w-full"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
