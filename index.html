@@ -371,6 +371,7 @@
             }
         };
 
+        // --- NEW: Helper to generate default schedule times based on count ---
         const generateDefaultSchedule = (count) => {
             // Default logical times spread through the day (8am to 8pm roughly)
             const times = [];
@@ -380,9 +381,11 @@
             if (count === 1) return ["12:00"];
             if (count === 2) return ["09:00", "19:00"];
             
-            const step = Math.floor((endHour - startHour) / (count - 1));
+            // Simple spread logic
+            const step = count > 1 ? (endHour - startHour) / (count - 1) : 0;
+            
             for (let i = 0; i < count; i++) {
-                const hour = startHour + (i * step);
+                const hour = Math.round(startHour + (i * step));
                 const timeString = `${hour < 10 ? '0' : ''}${hour}:00`;
                 times.push(timeString);
             }
@@ -438,11 +441,11 @@
         ];
 
         const CLINICAL_MODIFIERS = [
-            ['Wet-to-Dry', 'Lidocaine'],
+            ['Wet-to-Dry Gauze', 'Lidocaine'],
             ['Xeroform'],
             ['Betamethasone', 'Standard Lube'],
             ['Standard Lube'],
-            ['Wet-to-Dry'],
+            ['Wet-to-Dry Gauze'],
             [], // None
         ];
 
@@ -516,7 +519,7 @@
                         pain: 9, 
                         pressure: 8,
                         mood: ['Emergency'],
-                        modifiers: ['Wet-to-Dry'],
+                        modifiers: ['Wet-to-Dry Gauze'],
                         notes: `Emergency stop: High pain/bleeding noted when attempting to transition to next size.`,
                         surgeryAge: 'Demo Age',
                         isEmergency: true,
@@ -583,9 +586,9 @@
                     // If returning user has a name, assume setup is complete
                     const isSetup = parsed.isSetupComplete || (parsed.name && parsed.name !== 'Patient');
                     
-                    // Backfill schedule if missing
+                    // Backfill schedule if missing in old data, based on saved dailyTarget or default 4
                     let schedule = parsed.schedule;
-                    if (!schedule || schedule.length === 0) {
+                    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
                         schedule = generateDefaultSchedule(parsed.dailyTarget || 4);
                     }
 
