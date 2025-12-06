@@ -559,43 +559,67 @@
 
             // --- Robust Persistence: Lazy Initialization ---
             const [sessions, setSessions] = useState(() => {
-                const saved = localStorage.getItem('bloom_sessions');
-                return saved ? JSON.parse(saved) : [];
+                try {
+                    const saved = localStorage.getItem('bloom_sessions');
+                    return saved ? JSON.parse(saved) : [];
+                } catch (e) {
+                    console.error('Failed to parse sessions:', e);
+                    return [];
+                }
             });
 
             const [injections, setInjections] = useState(() => {
-                const saved = localStorage.getItem('bloom_injections');
-                return saved ? JSON.parse(saved) : [];
+                try {
+                    const saved = localStorage.getItem('bloom_injections');
+                    return saved ? JSON.parse(saved) : [];
+                } catch (e) {
+                    console.error('Failed to parse injections:', e);
+                    return [];
+                }
             });
 
             const [userSettings, setUserSettings] = useState(() => {
-                const saved = localStorage.getItem('bloom_settings');
-                const defaults = {
-                    surgeryDate: '',
-                    targetTime: 20,
-                    dailyTarget: 4, // Default to 4
-                    schedule: ["08:00", "12:00", "16:00", "20:00"], // Default 4 slots
-                    name: '',
-                    injectionSites: [],
-                    isSetupComplete: false,
-                    theme: 'light', // ADDED THEME SETTING
-                };
-                // Merge defaults with saved data to ensure new fields (like dailyTarget) are populated for existing users
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    // If returning user has a name, assume setup is complete
-                    const isSetup = parsed.isSetupComplete || (parsed.name && parsed.name !== 'Patient');
-                    
-                    // Backfill schedule if missing in old data, based on saved dailyTarget or default 4
-                    let schedule = parsed.schedule;
-                    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
-                        schedule = generateDefaultSchedule(parsed.dailyTarget || 4);
-                    }
+                try {
+                    const saved = localStorage.getItem('bloom_settings');
+                    const defaults = {
+                        surgeryDate: '',
+                        targetTime: 20,
+                        dailyTarget: 4, // Default to 4
+                        schedule: ["08:00", "12:00", "16:00", "20:00"], // Default 4 slots
+                        name: '',
+                        injectionSites: [],
+                        isSetupComplete: false,
+                        theme: 'light', // ADDED THEME SETTING
+                    };
+                    // Merge defaults with saved data to ensure new fields (like dailyTarget) are populated for existing users
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        // If returning user has a name, assume setup is complete
+                        const isSetup = parsed.isSetupComplete || (parsed.name && parsed.name !== 'Patient');
+                        
+                        // Backfill schedule if missing in old data, based on saved dailyTarget or default 4
+                        let schedule = parsed.schedule;
+                        if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
+                            schedule = generateDefaultSchedule(parsed.dailyTarget || 4);
+                        }
 
-                    // Ensure theme defaults to 'light' if not saved
-                    return { ...defaults, ...parsed, schedule, isSetupComplete: isSetup, theme: parsed.theme || 'light' };
+                        // Ensure theme defaults to 'light' if not saved
+                        return { ...defaults, ...parsed, schedule, isSetupComplete: isSetup, theme: parsed.theme || 'light' };
+                    }
+                    return defaults;
+                } catch (e) {
+                    console.error('Failed to parse settings:', e);
+                    return {
+                        surgeryDate: '',
+                        targetTime: 20,
+                        dailyTarget: 4,
+                        schedule: ["08:00", "12:00", "16:00", "20:00"],
+                        name: '',
+                        injectionSites: [],
+                        isSetupComplete: false,
+                        theme: 'light',
+                    };
                 }
-                return defaults;
             });
 
             // Session State
@@ -2122,7 +2146,59 @@
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<BloomApp />);
+        
+        // Error Boundary Component
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+
+            componentDidCatch(error, errorInfo) {
+                console.error('React Error:', error, errorInfo);
+            }
+
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="w-full h-screen flex items-center justify-center bg-red-50 p-6">
+                            <div className="text-center">
+                                <h1 className="text-2xl font-bold text-red-600 mb-2">Oops! Something went wrong</h1>
+                                <p className="text-gray-600 mb-4">The app encountered an error. Try refreshing the page.</p>
+                                <button onClick={() => window.location.reload()} className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold">Refresh Page</button>
+                                <p className="text-xs text-gray-500 mt-4 max-w-sm mx-auto">{this.state.error?.toString()}</p>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return this.props.children;
+            }
+        }
+
+        try {
+            root.render(
+                <ErrorBoundary>
+                    <BloomApp />
+                </ErrorBoundary>
+            );
+        } catch (e) {
+            console.error('Failed to render app:', e);
+            document.getElementById('root').innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #fee2e2; padding: 24px; font-family: sans-serif; text-align: center;">
+                    <div>
+                        <h1 style="font-size: 24px; font-weight: bold; color: #dc2626; margin-bottom: 8px;">Critical Error</h1>
+                        <p style="color: #7f1d1d; margin-bottom: 16px;">Failed to initialize the app. Check browser console for details.</p>
+                        <button onclick="window.location.reload()" style="background: #dc2626; color: white; padding: 8px 24px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;">Reload</button>
+                        <p style="font-size: 12px; color: #7f1d1d; margin-top: 16px;">${e.message}</p>
+                    </div>
+                </div>
+            `;
+        }
     </script>
 </body>
 
