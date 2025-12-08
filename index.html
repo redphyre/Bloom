@@ -255,7 +255,12 @@
                 rotateCw: <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5 M12 16v-4l-4-2" />,
                 // A simplified phone/tablet icon for the warning
                 tabletLandscape: <rect width="20" height="15" x="2" y="4.5" rx="3" ry="3" />,
-                clock: <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />,
+                clock: (
+                    <g>
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 6v6l4 2" />
+                    </g>
+                ),
             };
 
             return (
@@ -445,7 +450,6 @@
             }
 
             // 3. If all slots today are past or completed, find the first slot tomorrow
-            const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
             const nextDayTime = schedule.length > 0 ? schedule[0] : null;
 
             if (nextDayTime) {
