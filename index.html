@@ -255,7 +255,7 @@
                 rotateCw: <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5 M12 16v-4l-4-2" />,
                 // A simplified phone/tablet icon for the warning
                 tabletLandscape: <rect width="20" height="15" x="2" y="4.5" rx="3" ry="3" />,
-                clock: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>,
+                clock: <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />,
             };
 
             return (
@@ -391,6 +391,74 @@
             }
             return times;
         };
+        
+        // --- NEW: Helper to find the next scheduled dilation time ---
+        const findNextScheduledDilation = (schedule, sessions) => {
+            if (!schedule || schedule.length === 0) return null;
+
+            const now = new Date();
+            const todayDate = now.toISOString().split('T')[0];
+
+            // 1. Get today's completed sessions
+            const completedTimes = sessions
+                .filter(s => 
+                    !s.isMissed && 
+                    !s.isEmergency && 
+                    // NOTE: Hardcoding target time (20 min = 1200s) because the session timer is always 20 for demo.
+                    // In production, this should probably check the actual time against the scheduled duration.
+                    (s.duration || 0) >= 1200 && 
+                    s.date.startsWith(todayDate)
+                )
+                .map(s => {
+                    // Extract time in HH:MM format from ISO string, padded to 2 digits
+                    const d = new Date(s.date);
+                    return `${d.getHours() < 10 ? '0' : ''}${d.getHours()}:${d.getMinutes() < 10 ? '0' : ''}${d.getMinutes()}`;
+                });
+
+            // 2. Find the next *uncompleted* time today
+            const upcomingTime = schedule.find(scheduledTime => {
+                // Check if this time slot has already been marked as completed
+                if (completedTimes.includes(scheduledTime)) return false;
+
+                // Create a Date object for the scheduled time today
+                const [hour, minute] = scheduledTime.split(':').map(Number);
+                const scheduledDateTime = new Date(now);
+                scheduledDateTime.setHours(hour, minute, 0, 0);
+
+                // Check if the scheduled time is still upcoming (or very recently passed, giving a buffer)
+                // Using 60 minutes (3600000ms) buffer after the scheduled time to be considered 'on time' or 'just passed'
+                const bufferEnd = new Date(scheduledDateTime.getTime() + 60 * 60 * 1000); 
+                
+                return now < bufferEnd; 
+            });
+
+            if (upcomingTime) {
+                // Determine the correct index number for the display (1-based index)
+                const index = schedule.indexOf(upcomingTime) + 1;
+
+                return { 
+                    time: upcomingTime, 
+                    day: 'Today',
+                    index: index,
+                    isCompleted: false
+                };
+            }
+
+            // 3. If all slots today are past or completed, find the first slot tomorrow
+            const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            const nextDayTime = schedule.length > 0 ? schedule[0] : null;
+
+            if (nextDayTime) {
+                return {
+                    time: nextDayTime,
+                    day: 'Tomorrow',
+                    index: 1, // It's the first session of the new day
+                    isCompleted: false
+                };
+            }
+            
+            return null; // Schedule fully complete or not set up
+        };
 
         // --- Sound Helper ---
         const playCompletionSound = () => {
@@ -446,6 +514,8 @@
             ['Betamethasone', 'Standard Lube'],
             ['Standard Lube'],
             ['Wet-to-Dry Gauze'],
+            ['Lidocaine'], 
+            ['Betamethasone'],
             [], // None
         ];
 
@@ -456,6 +526,8 @@
             "Felt a big sense of relief once finished. The new position helped immensely.",
             "No major issues. Notes for tomorrow: try to reduce small size time.",
             "Very tired today, almost skipped, but glad I powered through. Low pain scores.",
+            "Slight spotting during the large size, applied additional gauze afterward.",
+            "Smooth session, zero pain. Feeling motivated!",
         ];
 
         const getRandomElement = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -559,67 +631,43 @@
 
             // --- Robust Persistence: Lazy Initialization ---
             const [sessions, setSessions] = useState(() => {
-                try {
-                    const saved = localStorage.getItem('bloom_sessions');
-                    return saved ? JSON.parse(saved) : [];
-                } catch (e) {
-                    console.error('Failed to parse sessions:', e);
-                    return [];
-                }
+                const saved = localStorage.getItem('bloom_sessions');
+                return saved ? JSON.parse(saved) : [];
             });
 
             const [injections, setInjections] = useState(() => {
-                try {
-                    const saved = localStorage.getItem('bloom_injections');
-                    return saved ? JSON.parse(saved) : [];
-                } catch (e) {
-                    console.error('Failed to parse injections:', e);
-                    return [];
-                }
+                const saved = localStorage.getItem('bloom_injections');
+                return saved ? JSON.parse(saved) : [];
             });
 
             const [userSettings, setUserSettings] = useState(() => {
-                try {
-                    const saved = localStorage.getItem('bloom_settings');
-                    const defaults = {
-                        surgeryDate: '',
-                        targetTime: 20,
-                        dailyTarget: 4, // Default to 4
-                        schedule: ["08:00", "12:00", "16:00", "20:00"], // Default 4 slots
-                        name: '',
-                        injectionSites: [],
-                        isSetupComplete: false,
-                        theme: 'light', // ADDED THEME SETTING
-                    };
-                    // Merge defaults with saved data to ensure new fields (like dailyTarget) are populated for existing users
-                    if (saved) {
-                        const parsed = JSON.parse(saved);
-                        // If returning user has a name, assume setup is complete
-                        const isSetup = parsed.isSetupComplete || (parsed.name && parsed.name !== 'Patient');
-                        
-                        // Backfill schedule if missing in old data, based on saved dailyTarget or default 4
-                        let schedule = parsed.schedule;
-                        if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
-                            schedule = generateDefaultSchedule(parsed.dailyTarget || 4);
-                        }
-
-                        // Ensure theme defaults to 'light' if not saved
-                        return { ...defaults, ...parsed, schedule, isSetupComplete: isSetup, theme: parsed.theme || 'light' };
+                const saved = localStorage.getItem('bloom_settings');
+                const defaults = {
+                    surgeryDate: '',
+                    targetTime: 20,
+                    dailyTarget: 4, // Default to 4
+                    schedule: ["08:00", "12:00", "16:00", "20:00"], // Default 4 slots
+                    name: '',
+                    injectionSites: [],
+                    isSetupComplete: false,
+                    theme: 'light', // ADDED THEME SETTING
+                };
+                // Merge defaults with saved data to ensure new fields (like dailyTarget) are populated for existing users
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // If returning user has a name, assume setup is complete
+                    const isSetup = parsed.isSetupComplete || (parsed.name && parsed.name !== 'Patient');
+                    
+                    // Backfill schedule if missing in old data, based on saved dailyTarget or default 4
+                    let schedule = parsed.schedule;
+                    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
+                        schedule = generateDefaultSchedule(parsed.dailyTarget || 4);
                     }
-                    return defaults;
-                } catch (e) {
-                    console.error('Failed to parse settings:', e);
-                    return {
-                        surgeryDate: '',
-                        targetTime: 20,
-                        dailyTarget: 4,
-                        schedule: ["08:00", "12:00", "16:00", "20:00"],
-                        name: '',
-                        injectionSites: [],
-                        isSetupComplete: false,
-                        theme: 'light',
-                    };
+
+                    // Ensure theme defaults to 'light' if not saved
+                    return { ...defaults, ...parsed, schedule, isSetupComplete: isSetup, theme: parsed.theme || 'light' };
                 }
+                return defaults;
             });
 
             // Session State
@@ -662,7 +710,7 @@
                 pain: 0,
                 pressure: 0,
                 mood: [],
-                modifiers: [], // NEW: Clinical Modifiers
+                modifiers: [], // Clinical Modifiers
                 notes: ''
             });
 
@@ -1222,6 +1270,7 @@
                 const dailyCount = getDailyCount();
                 const dailyTarget = userSettings.dailyTarget || 4;
                 const dailyProgress = Math.min((dailyCount / dailyTarget) * 100, 100);
+                const nextDilation = findNextScheduledDilation(userSettings.schedule, sessions); // NEW: Get next session
 
                 return (
                     // REMOVED 'space-y-6' from here to prevent extra top margin
@@ -1283,6 +1332,37 @@
                                     </div>
                                 </div>
                             </div>
+
+                            {/* NEW: Next Scheduled Session Card */}
+                            <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 mx-1">
+                                <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2 text-sm">
+                                    <Icon name="clock" className="w-4 h-4 text-purple-500" /> Next Scheduled Dilation
+                                </h3>
+
+                                {nextDilation ? (
+                                    <div className="flex justify-between items-center bg-purple-50/50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-900">
+                                        <div>
+                                            <p className="font-semibold text-gray-800 dark:text-gray-100">
+                                                {nextDilation.day} Session {nextDilation.index}
+                                            </p>
+                                            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 tabular-nums">
+                                                {nextDilation.time}
+                                            </p>
+                                        </div>
+                                        <button 
+                                            onClick={startSession}
+                                            className="px-4 py-2 bg-gradient-to-tr from-purple-600 to-pink-500 text-white rounded-full font-semibold text-sm shadow-md active:scale-95 transition-transform"
+                                        >
+                                            Start Now
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-gray-400 dark:text-gray-500 py-2 text-sm">
+                                        Daily schedule complete!
+                                    </p>
+                                )}
+                            </div>
+
 
                             {/* Quick Actions */}
                             <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto w-full">
@@ -1764,8 +1844,8 @@
                                     className={`w-full p-4 rounded-xl border-2 flex justify-between items-center transition-all ${tempInjectionSites.includes(site)
                                         ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300 font-semibold'
                                         : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-200'
-                                        }`}
-                                >
+                                                        }`}
+                                    >
                                     {site}
                                     {tempInjectionSites.includes(site) && <Icon name="check" className="w-5 h-5 text-pink-500" />}
                                 </button>
@@ -1881,8 +1961,6 @@
                                                                 onClick={() => deleteSession(session.id)}
                                                                 className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 bg-white/50 dark:bg-gray-800/50 hover:bg-red-50 rounded-full transition-colors z-10"
                                                                 title="Delete Entry"
-                                                            >
-                                                                <Icon name="trash2" className="w-4 h-4" />
                                                             </button>
                                                             <div className="flex justify-between items-start mb-3 pr-8">
                                                                 <div>
@@ -2146,59 +2224,7 @@
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        
-        // Error Boundary Component
-        class ErrorBoundary extends React.Component {
-            constructor(props) {
-                super(props);
-                this.state = { hasError: false, error: null };
-            }
-
-            static getDerivedStateFromError(error) {
-                return { hasError: true, error };
-            }
-
-            componentDidCatch(error, errorInfo) {
-                console.error('React Error:', error, errorInfo);
-            }
-
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div className="w-full h-screen flex items-center justify-center bg-red-50 p-6">
-                            <div className="text-center">
-                                <h1 className="text-2xl font-bold text-red-600 mb-2">Oops! Something went wrong</h1>
-                                <p className="text-gray-600 mb-4">The app encountered an error. Try refreshing the page.</p>
-                                <button onClick={() => window.location.reload()} className="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold">Refresh Page</button>
-                                <p className="text-xs text-gray-500 mt-4 max-w-sm mx-auto">{this.state.error?.toString()}</p>
-                            </div>
-                        </div>
-                    );
-                }
-
-                return this.props.children;
-            }
-        }
-
-        try {
-            root.render(
-                <ErrorBoundary>
-                    <BloomApp />
-                </ErrorBoundary>
-            );
-        } catch (e) {
-            console.error('Failed to render app:', e);
-            document.getElementById('root').innerHTML = `
-                <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #fee2e2; padding: 24px; font-family: sans-serif; text-align: center;">
-                    <div>
-                        <h1 style="font-size: 24px; font-weight: bold; color: #dc2626; margin-bottom: 8px;">Critical Error</h1>
-                        <p style="color: #7f1d1d; margin-bottom: 16px;">Failed to initialize the app. Check browser console for details.</p>
-                        <button onclick="window.location.reload()" style="background: #dc2626; color: white; padding: 8px 24px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;">Reload</button>
-                        <p style="font-size: 12px; color: #7f1d1d; margin-top: 16px;">${e.message}</p>
-                    </div>
-                </div>
-            `;
-        }
+        root.render(<BloomApp />);
     </script>
 </body>
 
