@@ -1633,25 +1633,6 @@
                             </div>
                         </div>
 
-                        {/* NEW: Clinical & Supplies Section */}
-                        <div className="mb-8">
-                            <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-3">Clinical & Supplies</label>
-                            <div className="flex flex-wrap gap-2">
-                                {['Wet-to-Dry Gauze', 'Xeroform', 'Betamethasone', 'Lidocaine', 'Standard Lube'].map(mod => (
-                                    <button 
-                                        key={mod} 
-                                        onClick={() => {
-                                            const newMods = aftercareData.modifiers.includes(mod) ? aftercareData.modifiers.filter(m => m !== mod) : [...aftercareData.modifiers, mod];
-                                            setAftercareData({ ...aftercareData, modifiers: newMods });
-                                        }} 
-                                        className={`px-4 py-2 rounded-full text-xs font-semibold transition-colors border ${aftercareData.modifiers.includes(mod) ? 'bg-blue-100 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                                    >
-                                        {mod}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
                         <div className="mb-8">
                             <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-3">Emotions & Mood</label>
                             <div className="flex flex-wrap gap-2">
@@ -1844,8 +1825,8 @@
                                     className={`w-full p-4 rounded-xl border-2 flex justify-between items-center transition-all ${tempInjectionSites.includes(site)
                                         ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300 font-semibold'
                                         : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-200'
-                                                        }`}
-                                    >
+                                        }`}
+                                >
                                     {site}
                                     {tempInjectionSites.includes(site) && <Icon name="check" className="w-5 h-5 text-pink-500" />}
                                 </button>
@@ -1961,6 +1942,8 @@
                                                                 onClick={() => deleteSession(session.id)}
                                                                 className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 bg-white/50 dark:bg-gray-800/50 hover:bg-red-50 rounded-full transition-colors z-10"
                                                                 title="Delete Entry"
+                                                            >
+                                                                <Icon name="trash2" className="w-4 h-4" />
                                                             </button>
                                                             <div className="flex justify-between items-start mb-3 pr-8">
                                                                 <div>
